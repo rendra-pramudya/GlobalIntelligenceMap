@@ -26,23 +26,21 @@ export function initDraw(map) {
   let activeLineColor = null
 
   // ── Symbol layer ──────────────────────────────────────────────────────────
-  map.on('load', () => {
-    map.addSource('draw-symbols-source', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    })
+  map.addSource('draw-symbols-source', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  })
 
-    map.addLayer({
-      id: 'draw-symbols-layer',
-      type: 'symbol',
-      source: 'draw-symbols-source',
-      layout: {
-        'icon-image': ['get', 'symbolName'],
-        'icon-size': 0.5,
-        'icon-allow-overlap': true,
-        'icon-anchor': 'center'
-      }
-    })
+  map.addLayer({
+    id: 'draw-symbols-layer',
+    type: 'symbol',
+    source: 'draw-symbols-source',
+    layout: {
+      'icon-image': ['get', 'symbolName'],
+      'icon-size': 0.5,
+      'icon-allow-overlap': true,
+      'icon-anchor': 'center'
+    }
   })
 
   // Lazy-load symbol images
