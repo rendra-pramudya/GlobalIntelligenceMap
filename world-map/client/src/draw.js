@@ -15,7 +15,7 @@ export function initDraw(map) {
   map.addControl(draw, 'top-left')
 
   // Connect to server WebSocket for draw sync
-  const socket = new WebSocket(`ws://${location.host}`)
+  const socket = new WebSocket(`ws://${location.host}/ws`)
 
   socket.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data)

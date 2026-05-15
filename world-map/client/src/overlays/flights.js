@@ -5,33 +5,23 @@ export function initFlights(map) {
   let visible = false
   let interval = null
 
-  map.on('load', () => {
-    map.addSource(SOURCE_ID, {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    })
+  map.addSource(SOURCE_ID, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  })
 
-    // Aircraft icon using built-in circle + text fallback
-    // For a proper airplane icon: add an image with map.loadImage() first
-    map.addLayer({
-      id: LAYER_ID,
-      type: 'symbol',
-      source: SOURCE_ID,
-      layout: {
-        'icon-image': 'airport',       // built-in maplibre icon
-        'icon-size': 0.8,
-        'icon-rotation-alignment': 'map',
-        'icon-rotate': ['get', 'heading'],
-        'icon-allow-overlap': true,
-        'text-field': ['get', 'callsign'],
-        'text-size': 10,
-        'text-offset': [0, 1.2],
-        'text-optional': true,
-        'visibility': 'none'
-      },
-      paint: { 'text-color': '#f0c040', 'text-halo-color': '#000', 'text-halo-width': 1 },
-      filter: ['!=', ['get', 'onGround'], true]
-    })
+  map.addLayer({
+    id: LAYER_ID,
+    type: 'circle',
+    source: SOURCE_ID,
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': 4,
+      'circle-color': '#f0c040',
+      'circle-stroke-width': 1,
+      'circle-stroke-color': '#000',
+      'circle-opacity': 0.9
+    }
   })
 
   async function refresh() {
