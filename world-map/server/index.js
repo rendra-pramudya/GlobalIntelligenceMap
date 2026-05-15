@@ -9,6 +9,7 @@ import earthquakesRouter from './routes/earthquakes.js'
 import conflictRouter from './routes/conflict.js'
 import weatherRouter from './routes/weather.js'
 import drawingsRouter from './routes/drawings.js'
+import settingsRouter from './routes/settings.js'
 
 const app = express()
 app.use(cors())
@@ -20,6 +21,7 @@ app.use('/api/earthquakes', earthquakesRouter)
 app.use('/api/conflict', conflictRouter)
 app.use('/api/weather', weatherRouter)
 app.use('/api/drawings', drawingsRouter)
+app.use('/api/settings', settingsRouter)
 
 // Health check
 app.get('/health', (_, res) => res.json({ ok: true }))

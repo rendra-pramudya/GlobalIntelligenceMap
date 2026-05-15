@@ -1,12 +1,36 @@
 import maplibregl from 'maplibre-gl'
 
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
+export const BASE_MAPS = {
+  standard: 'https://tiles.openfreemap.org/styles/liberty',
+  satellite: {
+    version: 8,
+    sources: {
+      satellite: {
+        type: 'raster',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: '© Esri, Maxar, Earthstar Geographics'
+      },
+      'satellite-labels': {
+        type: 'raster',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256,
+        maxzoom: 19
+      }
+    },
+    layers: [
+      { id: 'satellite-bg', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 22 },
+      { id: 'satellite-labels-layer', type: 'raster', source: 'satellite-labels', minzoom: 0, maxzoom: 22, paint: { 'raster-opacity': 0.8 } }
+    ]
+  }
+}
 
 export function initMap(containerId) {
   return new Promise((resolve) => {
     const map = new maplibregl.Map({
       container: containerId,
-      style: STYLE_URL,
+      style: BASE_MAPS.standard,
       center: [0, 20],
       zoom: 2,
       maxZoom: 18,
@@ -22,7 +46,7 @@ export function initMap(containerId) {
 }
 
 export function setProjection(map, projection) {
-  map.setProjection(projection === 'globe' ? { type: 'globe' } : { type: 'mercator' })
+  map.setProjection({ type: projection })
 
   if (projection === 'globe') {
     map.setSky({
@@ -34,4 +58,9 @@ export function setProjection(map, projection) {
   } else {
     map.setSky(null)
   }
+}
+
+export function setBaseMap(map, baseMapKey, onReady) {
+  map.once('style.load', onReady)
+  map.setStyle(BASE_MAPS[baseMapKey])
 }

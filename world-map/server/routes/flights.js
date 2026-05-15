@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { getConfig } from '../config.js'
 
 const router = Router()
 let cache = null
@@ -15,9 +16,10 @@ router.get('/', async (req, res) => {
   try {
     // OpenSky Network — free, no auth required for basic access
     const url = `https://opensky-network.org/api/states/all?lamin=${minLat}&lomin=${minLon}&lamax=${maxLat}&lomax=${maxLon}`
+    const { OPENSKY_USER, OPENSKY_PASS } = getConfig()
     const response = await fetch(url, {
-      headers: process.env.OPENSKY_USER
-        ? { Authorization: 'Basic ' + btoa(`${process.env.OPENSKY_USER}:${process.env.OPENSKY_PASS}`) }
+      headers: OPENSKY_USER
+        ? { Authorization: 'Basic ' + btoa(`${OPENSKY_USER}:${OPENSKY_PASS}`) }
         : {}
     })
 

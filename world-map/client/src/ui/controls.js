@@ -1,11 +1,24 @@
 import { setProjection } from '../map.js'
+import { initSettings } from './settings.js'
 
 export function initControls(map, drawContext, overlays) {
+  let _overlays = overlays
+  let _onBaseMapChange = null
+
   const panel = document.createElement('div')
   panel.id = 'controls'
   panel.innerHTML = `
     <div class="panel">
-      <div class="panel-title">World Map</div>
+      <div class="panel-header">
+        <span class="panel-title">World Map</span>
+        <button class="settings-btn" id="open-settings" title="API Settings">⚙</button>
+      </div>
+
+      <div class="section-label">Base Map</div>
+      <div class="basemap-toggle">
+        <button id="btn-standard" class="basemap-btn active">Standard</button>
+        <button id="btn-satellite" class="basemap-btn">Satellite</button>
+      </div>
 
       <div class="section-label">Projection</div>
       <div class="projection-toggle">
@@ -35,6 +48,21 @@ export function initControls(map, drawContext, overlays) {
   `
   document.body.appendChild(panel)
 
+  const settings = initSettings()
+  document.getElementById('open-settings').onclick = () => settings.open()
+
+  // Base map toggle
+  document.getElementById('btn-standard').onclick = () => {
+    document.getElementById('btn-standard').classList.add('active')
+    document.getElementById('btn-satellite').classList.remove('active')
+    _onBaseMapChange?.('standard')
+  }
+  document.getElementById('btn-satellite').onclick = () => {
+    document.getElementById('btn-satellite').classList.add('active')
+    document.getElementById('btn-standard').classList.remove('active')
+    _onBaseMapChange?.('satellite')
+  }
+
   // Projection toggle
   document.getElementById('btn-mercator').onclick = () => {
     setProjection(map, 'mercator')
@@ -48,20 +76,26 @@ export function initControls(map, drawContext, overlays) {
   }
 
   // Layer toggles
-  panel.querySelectorAll('input[data-layer]').forEach(input => {
-    input.addEventListener('change', () => {
-      const layer = input.dataset.layer
-      overlays[layer]?.toggle()
-
-      if (layer === 'weather') {
-        document.getElementById('weather-sub').style.display = input.checked ? '' : 'none'
-        document.getElementById('weather-select').style.display = input.checked ? '' : 'none'
-      }
+  function bindLayerToggles() {
+    panel.querySelectorAll('input[data-layer]').forEach(input => {
+      input.addEventListener('change', () => {
+        const layer = input.dataset.layer
+        _overlays[layer]?.toggle()
+        if (layer === 'weather') {
+          document.getElementById('weather-sub').style.display = input.checked ? '' : 'none'
+          document.getElementById('weather-select').style.display = input.checked ? '' : 'none'
+        }
+      })
     })
+  }
+  bindLayerToggles()
+
+  document.getElementById('weather-select').addEventListener('change', (e) => {
+    _overlays.weather?.setLayer(e.target.value)
   })
 
-  // Weather sub-layer selector
-  document.getElementById('weather-select').addEventListener('change', (e) => {
-    overlays.weather.setLayer(e.target.value)
-  })
+  return {
+    onBaseMapChange(cb) { _onBaseMapChange = cb },
+    updateOverlays(newOverlays) { _overlays = newOverlays }
+  }
 }

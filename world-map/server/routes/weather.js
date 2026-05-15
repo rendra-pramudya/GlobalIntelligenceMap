@@ -1,15 +1,14 @@
 import { Router } from 'express'
+import { getConfig } from '../config.js'
 
 const router = Router()
 
-// Proxies WMS tile requests to add API key server-side
-// Supports OpenWeatherMap tile layers
 router.get('/tile/:layer/:z/:x/:y', async (req, res) => {
   const { layer, z, x, y } = req.params
-  const apiKey = process.env.OWM_API_KEY
+  const { OWM_API_KEY: apiKey } = getConfig()
 
   if (!apiKey) {
-    return res.status(503).json({ error: 'OWM_API_KEY not configured' })
+    return res.status(503).json({ error: 'OWM_API_KEY not configured — add it in Settings' })
   }
 
   try {

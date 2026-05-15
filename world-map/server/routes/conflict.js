@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { getConfig } from '../config.js'
 
 const router = Router()
 let cache = null
@@ -9,14 +10,14 @@ router.get('/', async (req, res) => {
   if (cache && Date.now() - lastFetch < TTL) return res.json(cache)
 
   try {
-    if (!process.env.ACLED_KEY || !process.env.ACLED_EMAIL) {
-      // Return mock data if no ACLED credentials
+    const { ACLED_KEY, ACLED_EMAIL } = getConfig()
+    if (!ACLED_KEY || !ACLED_EMAIL) {
       return res.json(generateMockConflict())
     }
 
     const url = new URL('https://api.acleddata.com/acled/read')
-    url.searchParams.set('key', process.env.ACLED_KEY)
-    url.searchParams.set('email', process.env.ACLED_EMAIL)
+    url.searchParams.set('key', ACLED_KEY)
+    url.searchParams.set('email', ACLED_EMAIL)
     url.searchParams.set('limit', '1000')
     url.searchParams.set('fields', 'latitude:longitude:event_type:fatalities:event_date:country')
 
