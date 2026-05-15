@@ -93,11 +93,12 @@ export function initToolbar(drawController) {
 
     btn.addEventListener('click', () => {
       if (activeTool === name) {
-        // Deactivate
+        // Deactivate — fall back to select, keep symbol armed for click-to-place
         activeTool = null
         img.src = `/icons/${name}_OFF.png`
         btn.classList.remove('active')
         drawController.setTool('simple_select')
+        updatePathModeIndicator()
       } else {
         // Deactivate previous tool
         if (activeTool && toolBtnEls[activeTool]) {
@@ -105,15 +106,19 @@ export function initToolbar(drawController) {
           toolBtnEls[activeTool].btn.classList.remove('active')
         }
         activeTool = name
-        activeSymbol = null
         activeLineType = null
         activeLineColor = null
         img.src = `/icons/${name}_ON.png`
         btn.classList.add('active')
         drawController.setTool(mode)
-        drawController.setActiveSymbol(null)
+        // PEN keeps the active symbol (unit-path mode); other tools clear it
+        if (name !== 'PEN') {
+          activeSymbol = null
+          drawController.setActiveSymbol(null)
+          updateSymbolButtons()
+        }
         updateLineColorRow()
-        updateSymbolButtons()
+        updatePathModeIndicator()
       }
     })
 
@@ -122,6 +127,17 @@ export function initToolbar(drawController) {
   })
 
   panel.appendChild(toolRow)
+
+  // ── Unit-path mode indicator ───────────────────────────────────────────────
+  const pathIndicator = document.createElement('div')
+  pathIndicator.className = 'path-mode-indicator hidden'
+  pathIndicator.textContent = 'Unit Path Mode'
+  panel.appendChild(pathIndicator)
+
+  function updatePathModeIndicator() {
+    const isPathMode = activeTool === 'PEN' && !!activeSymbol
+    pathIndicator.classList.toggle('hidden', !isPathMode)
+  }
 
   // Set initial active tool
   toolBtnEls['INTERACTIVE'].img.src = '/icons/INTERACTIVE_ON.png'
@@ -293,23 +309,27 @@ export function initToolbar(drawController) {
           img.src = symbolOffIcon(name)
           btn.classList.remove('active')
           drawController.setActiveSymbol(null)
+          updatePathModeIndicator()
         } else {
           // Disarm previous symbol
           if (activeSymbol && symbolBtnEls[activeSymbol]) {
             symbolBtnEls[activeSymbol].img.src = symbolOffIcon(activeSymbol)
             symbolBtnEls[activeSymbol].btn.classList.remove('active')
           }
-          // Deactivate tools and lines
-          activeTool = null
-          activeLineType = null
-          activeLineColor = null
           activeSymbol = name
           img.src = symbolOnIcon(name)
           btn.classList.add('active')
-          updateToolButtons()
-          updateLineTypeButtons()
-          updateLineColorRow()
+          // Keep PEN active for unit-path mode; deactivate other tools
+          if (activeTool !== 'PEN') {
+            activeTool = null
+            activeLineType = null
+            activeLineColor = null
+            updateToolButtons()
+            updateLineTypeButtons()
+            updateLineColorRow()
+          }
           drawController.setActiveSymbol(name)
+          updatePathModeIndicator()
         }
       })
 

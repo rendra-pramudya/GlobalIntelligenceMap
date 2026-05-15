@@ -92,3 +92,17 @@
 .line-type-row { display: flex; gap: 4px; }
 .line-color-row { display: flex; gap: 4px; }
 .line-color-row.hidden { display: none; }
+
+.path-mode-indicator {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #4488ff;
+  background: rgba(68, 136, 255, 0.12);
+  border: 1px solid rgba(68, 136, 255, 0.3);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 4px 6px 0;
+  text-align: center;
+}
+.path-mode-indicator.hidden { display: none; }

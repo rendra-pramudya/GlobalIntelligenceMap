@@ -24,6 +24,7 @@ export function initDraw(map) {
   let activeSymbol = null
   let activeLineType = 'STROKE'
   let activeLineColor = null
+  const pathSymbols = new Map() // lineId -> symId for unit-path endpoint icons
 
   // ── Symbol layer ──────────────────────────────────────────────────────────
   map.addSource('draw-symbols-source', {
@@ -105,21 +106,67 @@ export function initDraw(map) {
       if (feature.geometry.type === 'LineString' || feature.geometry.type === 'Polygon') {
         draw.setFeatureProperty(id, 'lineType', activeLineType)
         draw.setFeatureProperty(id, 'lineColor', activeLineColor || 'DEFAULT')
+        if (activeSymbol && feature.geometry.type === 'LineString') {
+          draw.setFeatureProperty(id, 'unitSymbol', activeSymbol)
+        }
         feature = draw.get(id)
       }
       socket.send(JSON.stringify({ type: 'drawing_create', feature }))
+
+      // Unit-path mode: place symbol at line endpoint
+      if (activeSymbol && feature.geometry.type === 'LineString') {
+        const coords = feature.geometry.coordinates
+        const endCoord = coords[coords.length - 1]
+        const symId = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const symFeature = {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: endCoord },
+          properties: { id: symId, symbolName: activeSymbol, pathId: id }
+        }
+        pathSymbols.set(id, symId)
+        localSymbols.set(symId, symFeature)
+        updateSymbolSource()
+        socket.send(JSON.stringify({ type: 'symbol_create', feature: symFeature }))
+      }
     })
   })
 
   map.on('draw.update', ({ features }) => {
     features.forEach(feature => {
       socket.send(JSON.stringify({ type: 'drawing_update', feature }))
+
+      // Move endpoint symbol when line vertices change
+      if (feature.geometry.type === 'LineString') {
+        const symId = pathSymbols.get(feature.id)
+        if (symId) {
+          const coords = feature.geometry.coordinates
+          const endCoord = coords[coords.length - 1]
+          const existing = localSymbols.get(symId)
+          if (existing) {
+            const updated = {
+              ...existing,
+              geometry: { type: 'Point', coordinates: endCoord }
+            }
+            localSymbols.set(symId, updated)
+            updateSymbolSource()
+            socket.send(JSON.stringify({ type: 'symbol_create', feature: updated }))
+          }
+        }
+      }
     })
   })
 
   map.on('draw.delete', ({ features }) => {
     features.forEach(feature => {
       socket.send(JSON.stringify({ type: 'drawing_delete', id: feature.id }))
+
+      const symId = pathSymbols.get(feature.id)
+      if (symId) {
+        pathSymbols.delete(feature.id)
+        localSymbols.delete(symId)
+        updateSymbolSource()
+        socket.send(JSON.stringify({ type: 'symbol_delete', id: symId }))
+      }
     })
   })
 
@@ -131,6 +178,8 @@ export function initDraw(map) {
   // ── Symbol placement on map click ─────────────────────────────────────────
   map.on('click', (e) => {
     if (!activeSymbol) return
+    // In drawing modes the click is consumed by the draw tool; only place on select
+    if (draw.getMode() !== 'simple_select') return
 
     const id = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const feature = {
@@ -157,10 +206,7 @@ export function initDraw(map) {
 
   function setActiveSymbol(name) {
     activeSymbol = name
-    if (name) {
-      // Disarm draw tool when symbol is selected
-      draw.changeMode('simple_select')
-    }
+    // Don't change draw mode — allows PEN + symbol for unit-path drawing
   }
 
   function setActiveLine(type, color) {
@@ -174,6 +220,14 @@ export function initDraw(map) {
       const last = features[features.length - 1]
       draw.delete(last.id)
       socket.send(JSON.stringify({ type: 'drawing_delete', id: last.id }))
+
+      const symId = pathSymbols.get(last.id)
+      if (symId) {
+        pathSymbols.delete(last.id)
+        localSymbols.delete(symId)
+        updateSymbolSource()
+        socket.send(JSON.stringify({ type: 'symbol_delete', id: symId }))
+      }
     }
   }
 
