@@ -1,7 +1,6 @@
 import maplibregl from 'maplibre-gl'
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
-// Alternative free styles: 'bright', 'positron', 'dark-matter' from openfreemap.org
 
 export function initMap(containerId) {
   return new Promise((resolve) => {
@@ -11,8 +10,7 @@ export function initMap(containerId) {
       center: [0, 20],
       zoom: 2,
       maxZoom: 18,
-      projection: 'mercator', // start flat, toggle to 'globe'
-      antialias: true         // needed for smooth globe rendering
+      antialias: true
     })
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
@@ -23,23 +21,17 @@ export function initMap(containerId) {
   })
 }
 
-// Call from UI toggle button
 export function setProjection(map, projection) {
-  // projection: 'mercator' | 'globe'
-  map.setProjection(projection)
+  map.setProjection(projection === 'globe' ? { type: 'globe' } : { type: 'mercator' })
 
-  // In globe mode, enable atmosphere and sky layer
   if (projection === 'globe') {
-    if (!map.getLayer('sky')) {
-      map.setFog({
-        color: 'rgb(186, 210, 235)',
-        'high-color': 'rgb(36, 92, 223)',
-        'horizon-blend': 0.02,
-        'space-color': 'rgb(11, 11, 25)',
-        'star-intensity': 0.8
-      })
-    }
+    map.setSky({
+      'sky-type': 'atmosphere',
+      'sky-atmosphere-sun-intensity': 15,
+      'sky-atmosphere-color': 'rgba(36, 92, 223, 1)',
+      'sky-gradient-radius': 90
+    })
   } else {
-    map.setFog(null)
+    map.setSky(null)
   }
 }
