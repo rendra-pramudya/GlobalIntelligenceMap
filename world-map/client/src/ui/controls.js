@@ -26,6 +26,9 @@ export function initControls(map, drawContext, overlays) {
         <button id="btn-globe" class="proj-btn">Globe</button>
       </div>
 
+      <div class="section-label">Map</div>
+      <label class="layer-toggle"><input type="checkbox" id="toggle-labels" checked> City labels</label>
+
       <div class="section-label">Overlays</div>
       <label class="layer-toggle"><input type="checkbox" data-layer="flights">   Flights (ADS-B)</label>
       <label class="layer-toggle"><input type="checkbox" data-layer="vessels">   Marine vessels</label>
@@ -94,8 +97,35 @@ export function initControls(map, drawContext, overlays) {
     _overlays.weather?.setLayer(e.target.value)
   })
 
+  // City labels toggle
+  function getLabelLayers() {
+    return (map.getStyle()?.layers || [])
+      .filter(l => l.type === 'symbol' && l['source-layer'] === 'place')
+      .map(l => l.id)
+  }
+
+  let labelsVisible = true
+  document.getElementById('toggle-labels').addEventListener('change', (e) => {
+    labelsVisible = e.target.checked
+    const vis = labelsVisible ? 'visible' : 'none'
+    getLabelLayers().forEach(id => map.setLayoutProperty(id, 'visibility', vis))
+  })
+
+
+
+
   return {
-    onBaseMapChange(cb) { _onBaseMapChange = cb },
+    onBaseMapChange(cb) {
+      _onBaseMapChange = (key) => {
+        cb(key)
+        // Re-apply label state once the new style has loaded
+        map.once('style.load', () => {
+          if (!labelsVisible) {
+            getLabelLayers().forEach(id => map.setLayoutProperty(id, 'visibility', 'none'))
+          }
+        })
+      }
+    },
     updateOverlays(newOverlays) { _overlays = newOverlays }
   }
 }
