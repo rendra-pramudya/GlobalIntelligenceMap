@@ -1,6 +1,21 @@
 @echo off
 setlocal
 
+echo Installing dependencies...
+
+cd /d "%~dp0world-map\server"
+if not exist node_modules (
+    echo   [server] npm install...
+    npm install
+)
+
+cd /d "%~dp0world-map\client"
+if not exist node_modules (
+    echo   [client] npm install...
+    npm install
+)
+
+echo.
 echo Starting World Map server and client...
 
 :: Start the server in a new window
