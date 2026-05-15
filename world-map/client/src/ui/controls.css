@@ -117,3 +117,41 @@
   color: rgba(255,255,255,0.4);
   line-height: 1.5;
 }
+
+.place-finder {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.place-input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #e0e0e0;
+  padding: 5px 8px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.place-input::placeholder { color: rgba(255,255,255,0.25); }
+.place-input:focus { border-color: rgba(68,136,255,0.6); }
+
+.place-go-btn {
+  background: #4488ff;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  min-width: 34px;
+}
+
+.place-go-btn:hover { background: #5599ff; }
+.place-go-btn:disabled { background: rgba(68,136,255,0.4); cursor: default; }

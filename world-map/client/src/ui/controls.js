@@ -14,6 +14,11 @@ export function initControls(map, drawContext, overlays) {
         <button class="settings-btn" id="open-settings" title="API Settings">⚙</button>
       </div>
 
+      <div class="place-finder">
+        <input id="place-input" class="place-input" type="text" placeholder="Find a place…" />
+        <button id="place-go" class="place-go-btn">Go</button>
+      </div>
+
       <div class="section-label">Base Map</div>
       <div class="basemap-toggle">
         <button id="btn-standard" class="basemap-btn active">Standard</button>
@@ -95,6 +100,46 @@ export function initControls(map, drawContext, overlays) {
 
   document.getElementById('weather-select').addEventListener('change', (e) => {
     _overlays.weather?.setLayer(e.target.value)
+  })
+
+  // Place finder
+  async function goToPlace() {
+    const query = document.getElementById('place-input').value.trim()
+    if (!query) return
+    const btn = document.getElementById('place-go')
+    btn.textContent = '…'
+    btn.disabled = true
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      )
+      const data = await res.json()
+      if (data.length === 0) {
+        btn.textContent = '✕'
+        setTimeout(() => { btn.textContent = 'Go'; btn.disabled = false }, 1500)
+        return
+      }
+      const { lon, lat, boundingbox } = data[0]
+      if (boundingbox) {
+        map.fitBounds([
+          [+boundingbox[2], +boundingbox[0]],
+          [+boundingbox[3], +boundingbox[1]]
+        ], { padding: 40, maxZoom: 14, duration: 1000 })
+      } else {
+        map.flyTo({ center: [+lon, +lat], zoom: 10, duration: 1000 })
+      }
+      btn.textContent = '✓'
+      setTimeout(() => { btn.textContent = 'Go'; btn.disabled = false }, 1500)
+    } catch {
+      btn.textContent = 'Go'
+      btn.disabled = false
+    }
+  }
+
+  document.getElementById('place-go').addEventListener('click', goToPlace)
+  document.getElementById('place-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') goToPlace()
   })
 
   // City labels toggle
