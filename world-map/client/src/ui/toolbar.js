@@ -1,0 +1,380 @@
+import './toolbar.css'
+
+// PUBLIC_HELICOPTER has a typo in the ON filename
+const ON_OVERRIDES = {
+  PUBLIC_HELICOPTER: '/icons/PUBLICK_HELICOPTER_ON.png'
+}
+
+const SYMBOL_CATEGORIES = [
+  {
+    label: 'Markers',
+    symbols: ['LOCATION', 'FLAG', 'REBEL_FLAG', 'EXPLOSION', 'NUCLEAR', 'FLOOD', 'ROCKET', 'PULSE', 'CIRCLE', 'ARROW', 'RADAR']
+  },
+  {
+    label: 'Military',
+    symbols: ['SOLDIER', 'SOLDIER_STANDING', 'SOLDIER_SHOOTING', 'SOLDIER_FLAG', 'HELMET', 'REBEL_STANDING', 'REBEL_SHOOTING', 'RPG', 'WEAPON']
+  },
+  {
+    label: 'Air',
+    symbols: ['AIRPLANE', 'JETFIGHTER', 'STEALTH_BOMBER', 'DRONE', 'DRONE_BOMBER', 'KAMIKAZE_DRONE', 'HELICOPTER', 'PUBLIC_HELICOPTER', 'ANTI_MISSILE']
+  },
+  {
+    label: 'Naval',
+    symbols: ['BATTLESHIP', 'CARGOSHIP', 'CARRIER', 'SUBMARINE']
+  },
+  {
+    label: 'Ground',
+    symbols: ['TANK', 'JEEP', 'MILITARY_VEHICLE', 'MILITIA_VEHICLE', 'TRACTOR', 'AMBULANCE']
+  }
+]
+
+const LINE_TYPES = ['STROKE', 'DASHED', 'ARROW', 'FILL']
+const LINE_COLORS = ['BLUE', 'GREEN', 'RED', 'YELLOW']
+
+function symbolOnIcon(name) {
+  if (ON_OVERRIDES[name]) return ON_OVERRIDES[name]
+  return `/icons/${name}_ON.png`
+}
+
+function symbolOffIcon(name) {
+  return `/icons/${name}_OFF.png`
+}
+
+export function initToolbar(drawController) {
+  // State
+  let panelOpen = true
+  let activeTool = 'INTERACTIVE'
+  let activeSymbol = null
+  let activeLineType = null
+  let activeLineColor = null
+
+  // ── Root container ────────────────────────────────────────────────────────
+  const root = document.createElement('div')
+  root.id = 'draw-toolbar'
+  document.getElementById('map').appendChild(root)
+
+  // ── Power button ──────────────────────────────────────────────────────────
+  const powerBtn = document.createElement('button')
+  powerBtn.className = 'toolbar-power'
+  powerBtn.title = 'Toggle toolbar'
+
+  const powerImg = document.createElement('img')
+  powerImg.src = '/icons/POWER_ON.png'
+  powerImg.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;'
+  powerBtn.appendChild(powerImg)
+
+  root.appendChild(powerBtn)
+
+  // ── Panel ─────────────────────────────────────────────────────────────────
+  const panel = document.createElement('div')
+  panel.className = 'toolbar-panel'
+  root.appendChild(panel)
+
+  // ── Tool row (INTERACTIVE, MOVE, PEN, RULER) ──────────────────────────────
+  const toolRow = document.createElement('div')
+  toolRow.className = 'tool-row'
+
+  const TOOL_BUTTONS = [
+    { name: 'INTERACTIVE', mode: 'simple_select', title: 'Select' },
+    { name: 'MOVE', mode: 'simple_select', title: 'Move' },
+    { name: 'PEN', mode: 'draw_line_string', title: 'Draw line' },
+    { name: 'RULER', mode: 'draw_polygon', title: 'Draw polygon' },
+  ]
+
+  const toolBtnEls = {}
+  TOOL_BUTTONS.forEach(({ name, mode, title }) => {
+    const btn = document.createElement('button')
+    btn.className = 'tool-btn'
+    btn.title = title
+
+    const img = document.createElement('img')
+    img.src = `/icons/${name}_OFF.png`
+    btn.appendChild(img)
+
+    btn.addEventListener('click', () => {
+      if (activeTool === name) {
+        // Deactivate
+        activeTool = null
+        img.src = `/icons/${name}_OFF.png`
+        btn.classList.remove('active')
+        drawController.setTool('simple_select')
+      } else {
+        // Deactivate previous tool
+        if (activeTool && toolBtnEls[activeTool]) {
+          toolBtnEls[activeTool].img.src = `/icons/${activeTool}_OFF.png`
+          toolBtnEls[activeTool].btn.classList.remove('active')
+        }
+        activeTool = name
+        activeSymbol = null
+        activeLineType = null
+        activeLineColor = null
+        img.src = `/icons/${name}_ON.png`
+        btn.classList.add('active')
+        drawController.setTool(mode)
+        drawController.setActiveSymbol(null)
+        updateLineColorRow()
+        updateSymbolButtons()
+      }
+    })
+
+    toolBtnEls[name] = { btn, img }
+    toolRow.appendChild(btn)
+  })
+
+  panel.appendChild(toolRow)
+
+  // Set initial active tool
+  toolBtnEls['INTERACTIVE'].img.src = '/icons/INTERACTIVE_ON.png'
+  toolBtnEls['INTERACTIVE'].btn.classList.add('active')
+
+  // ── Action row (UNDO, DELETE) ─────────────────────────────────────────────
+  const actionRow = document.createElement('div')
+  actionRow.className = 'tool-row'
+
+  function makeActionBtn(name, title, action) {
+    const btn = document.createElement('button')
+    btn.className = 'tool-btn'
+    btn.title = title
+
+    const img = document.createElement('img')
+    img.src = `/icons/${name}_OFF.png`
+    btn.appendChild(img)
+
+    btn.addEventListener('click', () => {
+      img.src = `/icons/${name}_ON.png`
+      btn.classList.add('active')
+      action()
+      setTimeout(() => {
+        img.src = `/icons/${name}_OFF.png`
+        btn.classList.remove('active')
+      }, 200)
+    })
+
+    return btn
+  }
+
+  actionRow.appendChild(makeActionBtn('UNDO', 'Undo', () => drawController.undo()))
+  actionRow.appendChild(makeActionBtn('DELETE', 'Delete selected', () => drawController.deleteSelected()))
+  panel.appendChild(actionRow)
+
+  // ── Line section ──────────────────────────────────────────────────────────
+  const lineSection = document.createElement('div')
+  lineSection.className = 'line-section'
+
+  const lineTypeRow = document.createElement('div')
+  lineTypeRow.className = 'line-type-row'
+
+  const lineColorRow = document.createElement('div')
+  lineColorRow.className = 'line-color-row hidden'
+
+  const lineTypeBtnEls = {}
+  LINE_TYPES.forEach(type => {
+    const btn = document.createElement('button')
+    btn.className = 'tool-btn line-type-btn'
+    btn.title = type.charAt(0) + type.slice(1).toLowerCase()
+    btn.style.opacity = '0.45'
+
+    const img = document.createElement('img')
+    img.src = `/icons/LINE_${type}_ON.png`
+    btn.appendChild(img)
+
+    btn.addEventListener('click', () => {
+      if (activeLineType === type) {
+        // Deactivate
+        activeLineType = null
+        activeLineColor = null
+        btn.classList.remove('active')
+        btn.style.opacity = '0.45'
+        updateLineColorRow()
+        drawController.setActiveLine(null, null)
+      } else {
+        // Deactivate previous
+        if (activeLineType && lineTypeBtnEls[activeLineType]) {
+          lineTypeBtnEls[activeLineType].classList.remove('active')
+          lineTypeBtnEls[activeLineType].style.opacity = '0.45'
+        }
+        activeTool = null
+        activeSymbol = null
+        activeLineType = type
+        // Keep existing color or default to null
+        btn.classList.add('active')
+        btn.style.opacity = '1'
+        updateToolButtons()
+        updateSymbolButtons()
+        updateLineColorRow()
+        drawController.setActiveSymbol(null)
+        drawController.setTool('draw_line_string')
+        drawController.setActiveLine(type, activeLineColor)
+      }
+    })
+
+    lineTypeBtnEls[type] = btn
+    lineTypeRow.appendChild(btn)
+  })
+
+  // Color sub-row
+  const lineColorBtnEls = {}
+  LINE_COLORS.forEach(color => {
+    const btn = document.createElement('button')
+    btn.className = 'tool-btn line-color-btn'
+    btn.title = color.charAt(0) + color.slice(1).toLowerCase()
+
+    // Color icon uses current active line type
+    const img = document.createElement('img')
+    img.src = `/icons/LINE_STROKE_${color}.png` // placeholder, updated when type changes
+    btn.appendChild(img)
+
+    btn.addEventListener('click', () => {
+      if (activeLineColor === color) {
+        activeLineColor = null
+        btn.classList.remove('active')
+      } else {
+        if (activeLineColor && lineColorBtnEls[activeLineColor]) {
+          lineColorBtnEls[activeLineColor].classList.remove('active')
+        }
+        activeLineColor = color
+        btn.classList.add('active')
+      }
+      drawController.setActiveLine(activeLineType, activeLineColor)
+    })
+
+    lineColorBtnEls[color] = btn
+    lineColorRow.appendChild(btn)
+  })
+
+  lineSection.appendChild(lineTypeRow)
+  lineSection.appendChild(lineColorRow)
+  panel.appendChild(lineSection)
+
+  function updateLineColorRow() {
+    if (activeLineType) {
+      lineColorRow.classList.remove('hidden')
+      // Update color icons to match active line type
+      LINE_COLORS.forEach(color => {
+        const img = lineColorBtnEls[color].querySelector('img')
+        img.src = `/icons/LINE_${activeLineType}_${color}.png`
+      })
+    } else {
+      lineColorRow.classList.add('hidden')
+    }
+  }
+
+  // ── Symbol categories ─────────────────────────────────────────────────────
+  const symbolBtnEls = {}
+
+  SYMBOL_CATEGORIES.forEach(({ label, symbols }) => {
+    const section = document.createElement('div')
+    section.className = 'cat-section'
+
+    const header = document.createElement('div')
+    header.className = 'section-header'
+    header.textContent = label
+
+    const body = document.createElement('div')
+    body.className = 'cat-body'
+
+    header.addEventListener('click', () => {
+      section.classList.toggle('collapsed')
+    })
+
+    symbols.forEach(name => {
+      const btn = document.createElement('button')
+      btn.className = 'tool-btn symbol-btn'
+      btn.title = name.replace(/_/g, ' ')
+
+      const img = document.createElement('img')
+      img.src = symbolOffIcon(name)
+      btn.appendChild(img)
+
+      btn.addEventListener('click', () => {
+        if (activeSymbol === name) {
+          // Disarm
+          activeSymbol = null
+          img.src = symbolOffIcon(name)
+          btn.classList.remove('active')
+          drawController.setActiveSymbol(null)
+        } else {
+          // Disarm previous symbol
+          if (activeSymbol && symbolBtnEls[activeSymbol]) {
+            symbolBtnEls[activeSymbol].img.src = symbolOffIcon(activeSymbol)
+            symbolBtnEls[activeSymbol].btn.classList.remove('active')
+          }
+          // Deactivate tools and lines
+          activeTool = null
+          activeLineType = null
+          activeLineColor = null
+          activeSymbol = name
+          img.src = symbolOnIcon(name)
+          btn.classList.add('active')
+          updateToolButtons()
+          updateLineTypeButtons()
+          updateLineColorRow()
+          drawController.setActiveSymbol(name)
+        }
+      })
+
+      symbolBtnEls[name] = { btn, img }
+      body.appendChild(btn)
+    })
+
+    section.appendChild(header)
+    section.appendChild(body)
+    panel.appendChild(section)
+  })
+
+  // ── Helper: update all tool button states ─────────────────────────────────
+  function updateToolButtons() {
+    TOOL_BUTTONS.forEach(({ name }) => {
+      const { btn, img } = toolBtnEls[name]
+      if (activeTool === name) {
+        btn.classList.add('active')
+        img.src = `/icons/${name}_ON.png`
+      } else {
+        btn.classList.remove('active')
+        img.src = `/icons/${name}_OFF.png`
+      }
+    })
+  }
+
+  function updateLineTypeButtons() {
+    LINE_TYPES.forEach(type => {
+      const btn = lineTypeBtnEls[type]
+      if (activeLineType === type) {
+        btn.classList.add('active')
+        btn.style.opacity = '1'
+      } else {
+        btn.classList.remove('active')
+        btn.style.opacity = '0.45'
+      }
+    })
+  }
+
+  function updateSymbolButtons() {
+    Object.entries(symbolBtnEls).forEach(([name, { btn, img }]) => {
+      if (activeSymbol === name) {
+        btn.classList.add('active')
+        img.src = symbolOnIcon(name)
+      } else {
+        btn.classList.remove('active')
+        img.src = symbolOffIcon(name)
+      }
+    })
+  }
+
+  // ── Power button toggle ───────────────────────────────────────────────────
+  function updatePowerBtn() {
+    if (panelOpen) {
+      powerBtn.style.backgroundImage = "url('/icons/POWERBG_ON_.png')"
+    } else {
+      powerBtn.style.backgroundImage = "url('/icons/BasedPaneBody.png')"
+    }
+  }
+
+  powerBtn.addEventListener('click', () => {
+    panelOpen = !panelOpen
+    panel.classList.toggle('hidden', !panelOpen)
+    updatePowerBtn()
+  })
+
+  updatePowerBtn()
+}

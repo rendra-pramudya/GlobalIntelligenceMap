@@ -39,6 +39,7 @@ const wss = new WebSocketServer({ server })
 const connectedClients = new Set()
 let latestVessels = { type: 'FeatureCollection', features: [] }
 const drawings = new Map() // id -> GeoJSON feature
+const symbols_map = new Map() // id -> GeoJSON feature
 
 wss.on('connection', (ws) => {
   connectedClients.add(ws)
@@ -49,6 +50,7 @@ wss.on('connection', (ws) => {
     type: 'drawings_snapshot',
     data: Array.from(drawings.values())
   }))
+  ws.send(JSON.stringify({ type: 'symbols_snapshot', data: Array.from(symbols_map.values()) }))
 
   ws.on('message', (raw) => {
     try {
@@ -61,6 +63,15 @@ wss.on('connection', (ws) => {
 
       if (msg.type === 'drawing_delete') {
         drawings.delete(msg.id)
+        broadcast(msg, ws)
+      }
+
+      if (msg.type === 'symbol_create') {
+        symbols_map.set(msg.feature.properties.id, msg.feature)
+        broadcast(msg, ws)
+      }
+      if (msg.type === 'symbol_delete') {
+        symbols_map.delete(msg.id)
         broadcast(msg, ws)
       }
     } catch (e) {
