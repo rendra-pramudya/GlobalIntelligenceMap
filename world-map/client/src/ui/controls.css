@@ -1,0 +1,93 @@
+#controls {
+  position: absolute;
+  top: 16px;
+  left: 56px;
+  z-index: 10;
+}
+
+.panel {
+  background: rgba(10, 10, 20, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-width: 200px;
+  color: #e0e0e0;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 8px;
+  margin-bottom: 2px;
+}
+
+.projection-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.proj-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.proj-btn.active {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border-color: rgba(255,255,255,0.4);
+}
+
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 3px 0;
+  color: rgba(255,255,255,0.75);
+}
+
+.layer-toggle:hover { color: #fff; }
+
+.layer-toggle input[type="checkbox"] {
+  accent-color: #4488ff;
+  width: 14px;
+  height: 14px;
+}
+
+#weather-select {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #e0e0e0;
+  padding: 4px 6px;
+  font-size: 12px;
+  width: 100%;
+}
+
+.draw-info {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.5;
+}
