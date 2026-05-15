@@ -1,4 +1,4 @@
-import { initMap, setBaseMap } from './map.js'
+import { initMap, setBaseMap, enableTerrain } from './map.js'
 import { initDraw } from './draw.js'
 import { initOverlays } from './overlays/index.js'
 import { initControls } from './ui/controls.js'
@@ -29,6 +29,8 @@ async function main() {
         if (visible) overlays[name]?.show()
       }
       controls.updateOverlays(overlays)
+      // Re-apply terrain if it was enabled (setStyle wipes sources)
+      if (document.getElementById('toggle-terrain')?.checked) enableTerrain(map)
     })
   })
 }

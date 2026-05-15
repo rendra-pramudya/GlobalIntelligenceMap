@@ -155,3 +155,30 @@
 
 .place-go-btn:hover { background: #5599ff; }
 .place-go-btn:disabled { background: rgba(68,136,255,0.4); cursor: default; }
+
+.tilt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.tilt-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  min-width: 22px;
+}
+
+.tilt-slider {
+  flex: 1;
+  accent-color: #4488ff;
+  cursor: pointer;
+  height: 4px;
+}
+
+.tilt-value {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  min-width: 26px;
+  text-align: right;
+}

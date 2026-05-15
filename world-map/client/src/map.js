@@ -64,3 +64,22 @@ export function setBaseMap(map, baseMapKey, onReady) {
   map.once('style.load', onReady)
   map.setStyle(BASE_MAPS[baseMapKey])
 }
+
+const TERRAIN_SOURCE = {
+  type: 'raster-dem',
+  tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+  encoding: 'terrarium',
+  tileSize: 256,
+  maxzoom: 15
+}
+
+export function enableTerrain(map) {
+  if (!map.getSource('terrain-dem')) {
+    map.addSource('terrain-dem', TERRAIN_SOURCE)
+  }
+  map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 })
+}
+
+export function disableTerrain(map) {
+  map.setTerrain(null)
+}
