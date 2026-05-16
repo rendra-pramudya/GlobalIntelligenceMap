@@ -1,41 +1,98 @@
 import maplibregl from 'maplibre-gl'
 
-function makePlaneImage(color, size = 22) {
+// Top-down airplane icon — clean modern silhouette with glow
+function makePlaneImage(color, size = 32) {
   const canvas = document.createElement('canvas')
   canvas.width  = size
   canvas.height = size
   const ctx = canvas.getContext('2d')
-  const h = size / 2
+  const cx  = size / 2
+  const cy  = size / 2
+  const s   = size / 32
 
   ctx.clearRect(0, 0, size, size)
-  ctx.fillStyle   = color
-  ctx.strokeStyle = '#222'
-  ctx.lineWidth   = 0.7
 
-  // Fuselage
-  ctx.beginPath()
-  ctx.ellipse(h, h, 2.5, h - 1, 0, 0, Math.PI * 2)
-  ctx.fill(); ctx.stroke()
+  ctx.save()
+  ctx.translate(cx, cy)
 
-  // Wings
-  ctx.beginPath()
-  ctx.moveTo(h,        h - 1)
-  ctx.lineTo(1,        h + 4)
-  ctx.lineTo(h,        h + 1)
-  ctx.lineTo(size - 1, h + 4)
-  ctx.closePath()
-  ctx.fill(); ctx.stroke()
+  function plane(fillColor, strokeColor, lineW) {
+    ctx.fillStyle   = fillColor
+    ctx.strokeStyle = strokeColor
+    ctx.lineWidth   = lineW
 
-  // Tail fins
-  ctx.beginPath()
-  ctx.moveTo(h,        size - 2)
-  ctx.lineTo(3,        size - 5)
-  ctx.lineTo(h,        size - 4)
-  ctx.lineTo(size - 3, size - 5)
-  ctx.closePath()
-  ctx.fill(); ctx.stroke()
+    // Fuselage
+    ctx.beginPath()
+    ctx.moveTo(0, -13 * s)
+    ctx.bezierCurveTo( 2*s, -9*s,  2.8*s,  0,  2.2*s,  7*s)
+    ctx.bezierCurveTo( 1.5*s, 10*s,  0,   11*s,   0,  11*s)
+    ctx.bezierCurveTo(-1.5*s, 10*s, -2.2*s,  7*s, -2.2*s,  7*s)
+    ctx.bezierCurveTo(-2.8*s,  0,  -2*s,  -9*s,    0, -13*s)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+
+    // Left wing
+    ctx.beginPath()
+    ctx.moveTo(-2*s,  -1*s)
+    ctx.lineTo(-13.5*s,  4*s)
+    ctx.lineTo(-12*s,   6.5*s)
+    ctx.lineTo(-1.8*s,  3.5*s)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+
+    // Right wing
+    ctx.beginPath()
+    ctx.moveTo( 2*s,  -1*s)
+    ctx.lineTo( 13.5*s,  4*s)
+    ctx.lineTo( 12*s,   6.5*s)
+    ctx.lineTo( 1.8*s,  3.5*s)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+
+    // Left stabiliser
+    ctx.beginPath()
+    ctx.moveTo(-1.5*s,  8*s)
+    ctx.lineTo(-6.5*s, 11.5*s)
+    ctx.lineTo(-5.8*s, 13*s)
+    ctx.lineTo(-1.2*s, 10.5*s)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+
+    // Right stabiliser
+    ctx.beginPath()
+    ctx.moveTo( 1.5*s,  8*s)
+    ctx.lineTo( 6.5*s, 11.5*s)
+    ctx.lineTo( 5.8*s, 13*s)
+    ctx.lineTo( 1.2*s, 10.5*s)
+    ctx.closePath()
+    ctx.fill(); ctx.stroke()
+  }
+
+  // Soft drop shadow
+  ctx.shadowColor   = 'rgba(0,0,0,0.40)'
+  ctx.shadowBlur    = 3 * s
+  ctx.shadowOffsetY = 1.5 * s
+
+  // Gradient fill: lighter at nose → full colour at tail
+  const grad = ctx.createLinearGradient(-cx * 0.3, -cy * 0.8, cx * 0.3, cy * 0.5)
+  grad.addColorStop(0, lighten(color, 0.35))
+  grad.addColorStop(1, color)
+
+  plane(grad, 'rgba(255,255,255,0.55)', 0.9 * s)
+
+  ctx.restore()
 
   return ctx.getImageData(0, 0, size, size)
+}
+
+function lighten(hex, amount) {
+  const tmp = document.createElement('canvas')
+  tmp.width = tmp.height = 1
+  const t = tmp.getContext('2d')
+  t.fillStyle = hex
+  t.fillRect(0, 0, 1, 1)
+  const [r, g, b] = t.getImageData(0, 0, 1, 1).data
+  const mix = v => Math.round(v + (255 - v) * amount)
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`
 }
 
 function fmtAlt(alt) {
