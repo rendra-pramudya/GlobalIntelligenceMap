@@ -1,15 +1,17 @@
-import { initFlights } from './flights.js'
-import { initVessels } from './vessels.js'
+import { initFlights }     from './flights.js'
+import { initFlightradar } from './flightradar.js'
+import { initVessels }     from './vessels.js'
 import { initEarthquakes } from './earthquakes.js'
-import { initWeather } from './weather.js'
-import { initConflict } from './conflict.js'
+import { initWeather }     from './weather.js'
+import { initConflict }    from './conflict.js'
 
 export function initOverlays(map) {
-  const flights = initFlights(map)
-  const vessels = initVessels(map)
-  const earthquakes = initEarthquakes(map)
-  const weather = initWeather(map)
-  const conflict = initConflict(map)
-
-  return { flights, vessels, earthquakes, weather, conflict }
+  return {
+    flights:     initFlights(map),
+    flightradar: initFlightradar(map),
+    vessels:     initVessels(map),
+    earthquakes: initEarthquakes(map),
+    weather:     initWeather(map),
+    conflict:    initConflict(map)
+  }
 }

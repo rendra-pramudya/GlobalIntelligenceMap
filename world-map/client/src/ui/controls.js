@@ -55,7 +55,8 @@ export function initControls(map, drawContext, overlays, debug) {
       <label class="layer-toggle"><input type="checkbox" id="toggle-terrain"> 3D Terrain</label>
 
       <div class="section-label">Overlays</div>
-      <label class="layer-toggle"><input type="checkbox" data-layer="flights">   Flights (ADS-B)</label>
+      <label class="layer-toggle"><input type="checkbox" data-layer="flights">      Flights (ADS-B / OpenSky)</label>
+      <label class="layer-toggle"><input type="checkbox" data-layer="flightradar"> Flights (FlightRadar24)</label>
       <label class="layer-toggle"><input type="checkbox" data-layer="vessels">   Marine vessels</label>
       <label class="layer-toggle"><input type="checkbox" data-layer="earthquakes"> Earthquakes</label>
       <label class="layer-toggle"><input type="checkbox" data-layer="weather">   Weather</label>

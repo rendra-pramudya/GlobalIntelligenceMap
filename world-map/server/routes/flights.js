@@ -2,33 +2,39 @@ import { Router } from 'express'
 import { getConfig } from '../config.js'
 
 const router = Router()
-let cache = null
-let lastFetch = 0
-const TTL = 15_000 // 15 seconds
+const TTL = 15_000
+
+// Separate caches per source so toggling one doesn't invalidate the other
+const caches = { opensky: null, fr24: null }
+const lastFetch = { opensky: 0, fr24: 0 }
 
 router.get('/', async (req, res) => {
-  const { minLat = -90, maxLat = 90, minLon = -180, maxLon = 180 } = req.query
+  const { minLat = -90, maxLat = 90, minLon = -180, maxLon = 180, source } = req.query
+  const cfg = getConfig()
 
-  if (cache && Date.now() - lastFetch < TTL) {
-    return res.json(filterBbox(cache, +minLon, +minLat, +maxLon, +maxLat))
+  // Determine which source to use
+  const useFR24 = source === 'fr24' || (!source && cfg.FR24_API_KEY)
+  const key = useFR24 ? 'fr24' : 'opensky'
+
+  if (caches[key] && Date.now() - lastFetch[key] < TTL) {
+    return res.json(filterBbox(caches[key], +minLon, +minLat, +maxLon, +maxLat))
   }
-
-  const { FR24_API_KEY, OPENSKY_USER, OPENSKY_PASS } = getConfig()
 
   try {
     let geojson
-    if (FR24_API_KEY) {
-      geojson = await fetchFR24(FR24_API_KEY, +minLat, +maxLat, +minLon, +maxLon)
+    if (useFR24) {
+      if (!cfg.FR24_API_KEY) return res.status(503).json({ error: 'FR24_API_KEY not configured' })
+      geojson = await fetchFR24(cfg.FR24_API_KEY, +minLat, +maxLat, +minLon, +maxLon)
     } else {
-      geojson = await fetchOpenSky(OPENSKY_USER, OPENSKY_PASS, +minLat, +maxLat, +minLon, +maxLon)
+      geojson = await fetchOpenSky(cfg.OPENSKY_USER, cfg.OPENSKY_PASS, +minLat, +maxLat, +minLon, +maxLon)
     }
-    cache = geojson
-    lastFetch = Date.now()
-    res.json(filterBbox(cache, +minLon, +minLat, +maxLon, +maxLat))
+    caches[key] = geojson
+    lastFetch[key] = Date.now()
+    res.json(filterBbox(caches[key], +minLon, +minLat, +maxLon, +maxLat))
   } catch (e) {
-    console.error('Flights error:', e.message)
-    if (cache) return res.json(filterBbox(cache, +minLon, +minLat, +maxLon, +maxLat))
-    res.json(generateMockFlights())
+    console.error(`Flights (${key}) error:`, e.message)
+    if (caches[key]) return res.json(filterBbox(caches[key], +minLon, +minLat, +maxLon, +maxLat))
+    res.status(502).json({ error: e.message })
   }
 })
 
@@ -37,10 +43,7 @@ async function fetchFR24(apiKey, minLat, maxLat, minLon, maxLon) {
   const bounds = `${minLat},${maxLat},${minLon},${maxLon}`
   const url = `https://fr24api.com/api/live/flight-positions/full?bounds=${bounds}`
   const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Accept-Version': 'v1'
-    }
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept-Version': 'v1' }
   })
   if (!response.ok) throw new Error(`FR24 ${response.status}: ${await response.text()}`)
   const { data } = await response.json()
@@ -114,31 +117,6 @@ function filterBbox(geojson, minLon, minLat, maxLon, maxLat) {
       return lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat
     })
   }
-}
-
-function generateMockFlights() {
-  const features = Array.from({ length: 60 }, (_, i) => ({
-    type: 'Feature',
-    id: `FL${i}`,
-    geometry: {
-      type: 'Point',
-      coordinates: [(Math.random() - 0.5) * 360, (Math.random() - 0.5) * 140]
-    },
-    properties: {
-      callsign: `FL${String(i).padStart(3, '0')}`,
-      flight: `FL${String(i).padStart(3, '0')}`,
-      type: ['B738', 'A320', 'B77W'][i % 3],
-      reg: '',
-      origin: '',
-      destination: '',
-      altitude: 10000 + Math.random() * 5000,
-      velocity: 400 + Math.random() * 200,
-      heading: Math.random() * 360,
-      onGround: false,
-      source: 'mock'
-    }
-  }))
-  return { type: 'FeatureCollection', features }
 }
 
 export default router
