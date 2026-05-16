@@ -43,6 +43,17 @@ async function fetchFR24(cfg, minLat, maxLat, minLon, maxLon) {
 }
 
 async function fetchFR24Feed(minLat, maxLat, minLon, maxLon) {
+  // FR24 public feed rejects large bounding boxes — cap to ~60°lat × 90°lon
+  // centred on the requested viewport midpoint.
+  const latMid = (minLat + maxLat) / 2
+  const lonMid = (minLon + maxLon) / 2
+  const latHalf = Math.min((maxLat - minLat) / 2, 30)   // max ±30° lat
+  const lonHalf = Math.min((maxLon - minLon) / 2, 45)   // max ±45° lon
+  minLat = Math.max(-90,  latMid - latHalf)
+  maxLat = Math.min( 90,  latMid + latHalf)
+  minLon = Math.max(-180, lonMid - lonHalf)
+  maxLon = Math.min( 180, lonMid + lonHalf)
+
   // FR24 feed uses north,south,west,east (maxLat,minLat,minLon,maxLon)
   const bounds = `${maxLat},${minLat},${minLon},${maxLon}`
   const params = `bounds=${bounds}&faa=1&satellite=1&mlat=1&flarm=1&adsb=1&gnd=1&air=1&vehicles=1&estimated=1&maxage=14400&gliders=1&stats=1`

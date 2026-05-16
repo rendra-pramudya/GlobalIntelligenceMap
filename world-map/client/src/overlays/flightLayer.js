@@ -52,8 +52,13 @@ export function createFlightOverlay(map, { sourceParam, layerId, sourceId, image
   let popup    = null
 
   function ensureImage() {
-    if (!map.hasImage(imageId)) map.addImage(imageId, makePlaneImage(iconColor))
+    if (!map.hasImage(imageId)) {
+      const img = makePlaneImage(iconColor)
+      map.addImage(imageId, { width: img.width, height: img.height, data: img.data })
+    }
   }
+  // styleimagemissing fires when MapLibre first needs the icon — most reliable hook
+  map.on('styleimagemissing', (e) => { if (e.id === imageId) ensureImage() })
   map.on('style.load', ensureImage)
   ensureImage()
 
@@ -125,11 +130,15 @@ export function createFlightOverlay(map, { sourceParam, layerId, sourceId, image
       if (!res.ok) { console.warn(`Flight overlay (${sourceParam}) HTTP ${res.status}`); return }
       const data = await res.json()
       if (data.error) { console.warn(`Flight overlay (${sourceParam}):`, data.error); return }
+      console.debug(`Flight overlay (${sourceParam}): ${data.features?.length ?? 0} features`)
       if (map.getSource(sourceId)) map.getSource(sourceId).setData(data)
     } catch (e) {
       console.warn(`Flight overlay (${sourceParam}) fetch failed:`, e.message)
     }
   }
+
+  // Re-fetch when the user pans or zooms so new viewport gets fresh data
+  map.on('moveend', () => { if (visible) refresh() })
 
   return {
     get visible() { return visible },
