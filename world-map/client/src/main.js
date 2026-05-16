@@ -3,8 +3,10 @@ import { initDraw } from './draw.js'
 import { initOverlays } from './overlays/index.js'
 import { initControls } from './ui/controls.js'
 import { initToolbar } from './ui/toolbar.js'
+import { initDebug } from './ui/debug.js'
 import './ui/controls.css'
 import './ui/settings.css'
+import './ui/debug.css'
 
 async function main() {
   // Load saved base map so the map initialises with the right style immediately
@@ -14,8 +16,10 @@ async function main() {
   const drawController = initDraw(map)
   initToolbar(drawController)
 
+  const debug = initDebug()
+
   let overlays = initOverlays(map)
-  const controls = initControls(map, drawController, overlays)
+  const controls = initControls(map, drawController, overlays, debug)
 
   // Restore saved projection (controls' style.load handler will re-apply
   // labels + terrain if this triggers a style reload)

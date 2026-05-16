@@ -8,7 +8,7 @@ function load(key, fallback) {
 }
 function save(key, value) { localStorage.setItem(key, value) }
 
-export function initControls(map, drawContext, overlays) {
+export function initControls(map, drawContext, overlays, debug) {
   let _overlays = overlays
   let _onBaseMapChange = null
 
@@ -27,6 +27,7 @@ export function initControls(map, drawContext, overlays) {
         <span class="panel-title">World Map</span>
         <div class="panel-header-actions">
           <button class="settings-btn" id="minimize-panel" title="Minimize">−</button>
+          <button class="settings-btn" id="open-debug" title="API Diagnostics">🔍</button>
           <button class="settings-btn" id="open-settings" title="API Settings">⚙</button>
         </div>
       </div>
@@ -91,9 +92,10 @@ export function initControls(map, drawContext, overlays) {
   document.getElementById('toggle-labels').checked  = labelsVisible
   document.getElementById('toggle-terrain').checked = terrainEnabled
 
-  // ── Settings modal ─────────────────────────────────────────────────────────
+  // ── Settings + Debug modals ────────────────────────────────────────────────
   const settings = initSettings()
   document.getElementById('open-settings').onclick = () => settings.open()
+  document.getElementById('open-debug').onclick    = () => debug?.open()
 
   // ── Minimize ───────────────────────────────────────────────────────────────
   const minimizeBtn = document.getElementById('minimize-panel')

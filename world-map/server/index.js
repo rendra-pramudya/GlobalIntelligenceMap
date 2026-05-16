@@ -10,6 +10,7 @@ import conflictRouter from './routes/conflict.js'
 import weatherRouter from './routes/weather.js'
 import drawingsRouter from './routes/drawings.js'
 import settingsRouter from './routes/settings.js'
+import debugRouter from './routes/debug.js'
 
 const app = express()
 app.use(cors())
@@ -22,6 +23,7 @@ app.use('/api/conflict', conflictRouter)
 app.use('/api/weather', weatherRouter)
 app.use('/api/drawings', drawingsRouter)
 app.use('/api/settings', settingsRouter)
+app.use('/api/debug',    debugRouter)
 
 // Health check
 app.get('/health', (_, res) => res.json({ ok: true }))
