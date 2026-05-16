@@ -35,14 +35,6 @@ export function initControls(map, drawContext, overlays) {
         <button id="btn-globe" class="proj-btn">Globe</button>
       </div>
 
-      <div class="section-label">Camera</div>
-      <div class="tilt-row">
-        <span class="tilt-label">Tilt</span>
-        <input type="range" id="tilt-slider" class="tilt-slider" min="0" max="85" value="0" step="1">
-        <span id="tilt-value" class="tilt-value">0°</span>
-      </div>
-      <label class="layer-toggle"><input type="checkbox" id="toggle-rotation"> Auto-rotate</label>
-
       <div class="section-label">Map</div>
       <label class="layer-toggle"><input type="checkbox" id="toggle-labels" checked> City labels</label>
       <label class="layer-toggle"><input type="checkbox" id="toggle-terrain"> 3D Terrain</label>
@@ -178,45 +170,6 @@ export function initControls(map, drawContext, overlays) {
       })
       .map(l => l.id)
   }
-
-  // Tilt / pitch slider
-  const tiltSlider = document.getElementById('tilt-slider')
-  const tiltValueEl = document.getElementById('tilt-value')
-
-  tiltSlider.addEventListener('input', () => {
-    const pitch = +tiltSlider.value
-    map.setPitch(pitch)
-    tiltValueEl.textContent = `${pitch}°`
-  })
-
-  map.on('pitch', () => {
-    const pitch = Math.round(map.getPitch())
-    tiltSlider.value = pitch
-    tiltValueEl.textContent = `${pitch}°`
-  })
-
-  // Auto-rotate (globe spin)
-  let rotating = false
-  let spinRaf = null
-
-  function spinStep() {
-    map.setBearing((map.getBearing() + 0.05) % 360)
-    spinRaf = requestAnimationFrame(spinStep)
-  }
-
-  function startSpin() { if (rotating && !spinRaf) spinRaf = requestAnimationFrame(spinStep) }
-  function stopSpin()  { if (spinRaf) { cancelAnimationFrame(spinRaf); spinRaf = null } }
-
-  document.getElementById('toggle-rotation').addEventListener('change', (e) => {
-    rotating = e.target.checked
-    rotating ? startSpin() : stopSpin()
-  })
-
-  // Pause while the user drags; resume on release
-  map.on('mousedown',  stopSpin)
-  map.on('touchstart', stopSpin)
-  map.on('mouseup',    startSpin)
-  map.on('touchend',   startSpin)
 
   // Labels toggle
   let labelsVisible = true
