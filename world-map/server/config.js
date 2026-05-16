@@ -7,12 +7,13 @@ const CONFIG_PATH = join(__dirname, 'config.json')
 
 export const KEYS = [
   'OPENSKY_USER', 'OPENSKY_PASS',
+  'FR24_API_KEY',
   'AIS_API_KEY', 'AIS_API_URL',
   'OWM_API_KEY',
   'ACLED_KEY', 'ACLED_EMAIL'
 ]
 
-const SENSITIVE = new Set(['OPENSKY_PASS', 'AIS_API_KEY', 'OWM_API_KEY', 'ACLED_KEY'])
+const SENSITIVE = new Set(['OPENSKY_PASS', 'AIS_API_KEY', 'FR24_API_KEY', 'OWM_API_KEY', 'ACLED_KEY'])
 
 function load() {
   try {

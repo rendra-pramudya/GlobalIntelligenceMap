@@ -32,6 +32,22 @@ export function initSettings() {
 
         <div class="settings-section">
           <div class="settings-section-title">
+            FlightRadar24
+            <span class="badge badge-paid">Paid</span>
+          </div>
+          <p class="settings-desc">
+            Real-time flight data with aircraft type, route, and registration.
+            Register at <a href="https://fr24api.com" target="_blank">fr24api.com</a>.
+            When set, replaces OpenSky as the flights data source.
+          </p>
+          <label class="settings-label">
+            API Key
+            <input class="settings-input" type="password" name="FR24_API_KEY" placeholder="••••••••" />
+          </label>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">
             AIS Stream
             <span class="badge badge-free">Free tier</span>
           </div>

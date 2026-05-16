@@ -138,6 +138,42 @@
 
 .badge-free { background: rgba(68,255,136,0.15); color: #44ff88; }
 .badge-required { background: rgba(255,170,68,0.15); color: #ffaa44; }
+.badge-paid { background: rgba(170,68,255,0.15); color: #aa44ff; }
+
+/* ── Flight popup ─────────────────────────────────────────────────────────── */
+.maplibregl-popup-content {
+  background: rgba(10, 10, 20, 0.95) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+  color: #e0e0e0 !important;
+}
+
+.maplibregl-popup-tip { display: none !important; }
+
+.flight-popup-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f0c040;
+  margin-bottom: 6px;
+}
+
+.flight-popup-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.flight-popup-table td {
+  padding: 2px 4px;
+  vertical-align: top;
+}
+
+.flight-popup-table td:first-child {
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+  padding-right: 8px;
+}
 
 .settings-actions {
   display: flex;
