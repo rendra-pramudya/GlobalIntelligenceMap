@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
       ACLED_KEY:     !!cfg.ACLED_KEY,
       ACLED_EMAIL:   !!cfg.ACLED_EMAIL
     },
-    apis: { earthquakes, flights, weather, conflict, vessels }
+    apis: { earthquakes, 'flights (opensky)': flights.opensky, 'flights (fr24)': flights.fr24, weather, conflict, vessels }
   }
   lastRun = Date.now()
   res.json(lastResult)
@@ -82,23 +82,12 @@ async function probeEarthquakes() {
 }
 
 async function probeFlights(cfg) {
-  if (cfg.FR24_API_KEY) {
-    return timed(async () => {
-      // Small bounding box over central Europe to keep response light
-      const url = 'https://fr24api.com/api/live/flight-positions/full?bounds=45,55,5,15'
-      const r = await fetchWithTimeout(url, {
-        headers: { Authorization: `Bearer ${cfg.FR24_API_KEY}`, 'Accept-Version': 'v1' }
-      })
-      if (!r.ok) {
-        const body = await r.text().catch(() => '')
-        throw new Error(`FR24 HTTP ${r.status}: ${body.slice(0, 120)}`)
-      }
-      const json = await r.json()
-      return { status: 'ok', source: 'flightradar24', configured: true, features: countFeatures(json) }
-    })
-  }
+  // Probe both sources independently and return combined result
+  const [opensky, fr24] = await Promise.all([probeOpenSky(cfg), probeFR24Feed(cfg)])
+  return { opensky, fr24 }
+}
 
-  // OpenSky — same small bbox
+async function probeOpenSky(cfg) {
   return timed(async () => {
     const url = 'https://opensky-network.org/api/states/all?lamin=45&lomin=5&lamax=55&lomax=15'
     const headers = cfg.OPENSKY_USER
@@ -111,9 +100,47 @@ async function probeFlights(cfg) {
       status: 'ok',
       source: cfg.OPENSKY_USER ? 'opensky (authenticated)' : 'opensky (anonymous)',
       configured: !!cfg.OPENSKY_USER,
-      features: countFeatures(json)
+      features: json.states?.length ?? 0
     }
   })
+}
+
+async function probeFR24Feed(cfg) {
+  // FR24 unofficial feed — no key needed. bounds: north,south,west,east
+  const feedResult = await timed(async () => {
+    const url = 'https://data-live.flightradar24.com/zones/fcgi/feed.js?bounds=55,45,5,15&faa=1&satellite=1&mlat=1&flarm=1&adsb=1&gnd=1&air=1&vehicles=1&estimated=1&maxage=14400&gliders=1'
+    const r = await fetchWithTimeout(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept':     'application/json',
+        'Referer':    'https://www.flightradar24.com/',
+        'Origin':     'https://www.flightradar24.com'
+      }
+    })
+    if (!r.ok) throw new Error(`FR24 feed HTTP ${r.status}`)
+    const json = await r.json()
+    const count = Object.values(json).filter(Array.isArray).length
+    return { status: 'ok', source: 'fr24 (public feed)', configured: true, features: count }
+  })
+
+  // If user also has an official key, probe that too and note it
+  if (cfg.FR24_API_KEY) {
+    const officialResult = await timed(async () => {
+      const url = 'https://fr24api.com/api/live/flight-positions/full?bounds=45,55,5,15'
+      const r = await fetchWithTimeout(url, {
+        headers: { 'Authorization': `Bearer ${cfg.FR24_API_KEY}`, 'Accept-Version': 'v1' }
+      })
+      if (!r.ok) {
+        const body = await r.text().catch(() => '')
+        throw new Error(`FR24 official API HTTP ${r.status}: ${body.slice(0, 120)}`)
+      }
+      const json = await r.json()
+      return { status: 'ok', source: 'fr24api.com (official)', configured: true, features: countFeatures(json) }
+    })
+    feedResult.official_api = officialResult
+  }
+
+  return feedResult
 }
 
 async function probeWeather(cfg) {
