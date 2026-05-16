@@ -198,7 +198,7 @@ export function initControls(map, drawContext, overlays) {
           [+boundingbox[3], +boundingbox[1]]
         ], { padding: 40, maxZoom: 14, duration: 1000 })
       } else {
-        map.flyTo({ center: [+lon, +lat], zoom: 10, duration: 1000 })
+        map.flyTo({ center: [+lon, +lat], zoom: 10, duration: 1000, essential: true })
       }
       btn.textContent = '✓'
       setTimeout(() => { btn.textContent = 'Go'; btn.disabled = false }, 1500)
@@ -254,10 +254,14 @@ export function initControls(map, drawContext, overlays) {
       goBtn.className = 'saved-loc-go'
       goBtn.textContent = 'Go'
       goBtn.addEventListener('click', () => {
-        map.flyTo({ center: loc.center, zoom: loc.zoom,
-                    pitch: loc.pitch, bearing: loc.bearing, duration: 2000 })
-        if (loc.drawState) {
-          map.once('moveend', () => drawContext.restoreState(loc.drawState))
+        const state = loc.drawState
+        map.flyTo({
+          center: loc.center, zoom: loc.zoom,
+          pitch: loc.pitch, bearing: loc.bearing,
+          duration: 2000, essential: true
+        })
+        if (state) {
+          map.once('moveend', () => drawContext.restoreState(state))
         }
       })
 
