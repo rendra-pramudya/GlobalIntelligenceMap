@@ -106,33 +106,39 @@ async function probeOpenSky(cfg) {
 }
 
 async function probeFR24Feed(cfg) {
-  // Primary: ADS-B Exchange via adsb.lol (free, no key, works server-side)
-  const result = await timed(async () => {
-    const url = 'https://api.adsb.lol/v2/lat/1.35/lon/103.82/dist/100/'  // Singapore
-    const r   = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } })
-    if (!r.ok) throw new Error(`adsb.lol HTTP ${r.status}`)
-    const json = await r.json()
-    const count = (json.ac || []).length
-    return { status: 'ok', source: 'adsb.lol (ADS-B Exchange)', configured: true, features: count }
-  })
+  // Try both ADS-B sources so the user can see which one is reachable
+  const [adsbFi, adsbLol] = await Promise.all([
+    timed(async () => {
+      const url = 'https://opendata.adsb.fi/api/v2/lat/1.35/lon/103.82/dist/100/'
+      const r   = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } })
+      if (!r.ok) throw new Error(`adsb.fi HTTP ${r.status}`)
+      const { aircraft } = await r.json()
+      return { status: 'ok', source: 'opendata.adsb.fi', configured: true, features: (aircraft || []).length }
+    }),
+    timed(async () => {
+      const url = 'https://api.adsb.lol/v2/lat/1.35/lon/103.82/dist/100/'
+      const r   = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } })
+      if (!r.ok) throw new Error(`adsb.lol HTTP ${r.status}`)
+      const { ac } = await r.json()
+      return { status: 'ok', source: 'api.adsb.lol', configured: true, features: (ac || []).length }
+    })
+  ])
 
-  // If user also has an official FR24 key, probe that too
+  const result = adsbFi.status === 'ok' ? adsbFi : adsbLol
+
   if (cfg.FR24_API_KEY) {
     result.fr24_official = await timed(async () => {
       const url = 'https://fr24api.com/api/live/flight-positions/full?bounds=45,55,5,15'
       const r   = await fetchWithTimeout(url, {
         headers: { 'Authorization': `Bearer ${cfg.FR24_API_KEY}`, 'Accept-Version': 'v1' }
       })
-      if (!r.ok) {
-        const body = await r.text().catch(() => '')
-        throw new Error(`FR24 official API HTTP ${r.status}: ${body.slice(0, 120)}`)
-      }
+      if (!r.ok) throw new Error(`FR24 official HTTP ${r.status}: ${(await r.text()).slice(0, 80)}`)
       const json = await r.json()
-      return { status: 'ok', source: 'fr24api.com (official)', configured: true, features: countFeatures(json) }
+      return { status: 'ok', source: 'fr24api.com', configured: true, features: countFeatures(json) }
     })
   }
 
-  return result
+  return { adsbFi, adsbLol, active: result }
 }
 
 async function probeWeather(cfg) {
