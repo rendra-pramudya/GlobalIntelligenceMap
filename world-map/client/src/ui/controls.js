@@ -37,6 +37,7 @@ export function initControls(map, drawContext, overlays) {
         <input type="range" id="tilt-slider" class="tilt-slider" min="0" max="85" value="0" step="1">
         <span id="tilt-value" class="tilt-value">0°</span>
       </div>
+      <label class="layer-toggle"><input type="checkbox" id="toggle-rotation"> Auto-rotate</label>
 
       <div class="section-label">Map</div>
       <label class="layer-toggle"><input type="checkbox" id="toggle-labels" checked> City labels</label>
@@ -150,10 +151,18 @@ export function initControls(map, drawContext, overlays) {
     if (e.key === 'Enter') goToPlace()
   })
 
-  // City labels toggle
+  // Label layer detection — covers OpenMapTiles, OpenFreeMap Liberty, and common variants
   function getLabelLayers() {
     return (map.getStyle()?.layers || [])
-      .filter(l => l.type === 'symbol' && l['source-layer'] === 'place')
+      .filter(l => {
+        if (l.type !== 'symbol') return false
+        const sl = l['source-layer'] || ''
+        if (sl === 'place' || sl === 'place_label') return true
+        const id = (l.id || '').toLowerCase()
+        return id.includes('place') || id.includes('city') || id.includes('town') ||
+               id.includes('village') || id.includes('suburb') || id.includes('state') ||
+               id.includes('country') || id.includes('capital')
+      })
       .map(l => l.id)
   }
 
@@ -173,7 +182,30 @@ export function initControls(map, drawContext, overlays) {
     tiltValueEl.textContent = `${pitch}°`
   })
 
-  // City labels toggle
+  // Auto-rotate (globe spin)
+  let rotating = false
+  let spinRaf = null
+
+  function spinStep() {
+    map.setBearing((map.getBearing() + 0.05) % 360)
+    spinRaf = requestAnimationFrame(spinStep)
+  }
+
+  function startSpin() { if (rotating && !spinRaf) spinRaf = requestAnimationFrame(spinStep) }
+  function stopSpin()  { if (spinRaf) { cancelAnimationFrame(spinRaf); spinRaf = null } }
+
+  document.getElementById('toggle-rotation').addEventListener('change', (e) => {
+    rotating = e.target.checked
+    rotating ? startSpin() : stopSpin()
+  })
+
+  // Pause while the user drags; resume on release
+  map.on('mousedown',  stopSpin)
+  map.on('touchstart', stopSpin)
+  map.on('mouseup',    startSpin)
+  map.on('touchend',   startSpin)
+
+  // Labels toggle
   let labelsVisible = true
   document.getElementById('toggle-labels').addEventListener('change', (e) => {
     labelsVisible = e.target.checked
