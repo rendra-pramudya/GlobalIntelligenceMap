@@ -75,10 +75,10 @@ export function initToolbar(drawController) {
   toolRow.className = 'tool-row'
 
   const TOOL_BUTTONS = [
-    { name: 'INTERACTIVE', mode: 'simple_select', title: 'Select' },
-    { name: 'MOVE', mode: 'simple_select', title: 'Move' },
-    { name: 'PEN', mode: 'draw_line_string', title: 'Draw line' },
-    { name: 'RULER', mode: 'draw_polygon', title: 'Draw polygon' },
+    { name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' },
+    { name: 'MOVE',        mode: 'simple_select',    title: 'Move' },
+    { name: 'PEN',         mode: 'freehand_line',    title: 'Draw line (freehand)' },
+    { name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon (freehand)' },
   ]
 
   const toolBtnEls = {}
