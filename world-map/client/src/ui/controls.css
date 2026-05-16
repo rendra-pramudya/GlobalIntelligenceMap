@@ -26,6 +26,15 @@
   margin-bottom: 4px;
 }
 
+.panel-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.panel-body.hidden {
+  display: none;
+}
+
 .panel-title {
   font-size: 14px;
   font-weight: 600;

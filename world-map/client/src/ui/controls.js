@@ -11,9 +11,13 @@ export function initControls(map, drawContext, overlays) {
     <div class="panel">
       <div class="panel-header">
         <span class="panel-title">World Map</span>
-        <button class="settings-btn" id="open-settings" title="API Settings">⚙</button>
+        <div class="panel-header-actions">
+          <button class="settings-btn" id="minimize-panel" title="Minimize">−</button>
+          <button class="settings-btn" id="open-settings" title="API Settings">⚙</button>
+        </div>
       </div>
 
+      <div class="panel-body">
       <div class="place-finder">
         <input id="place-input" class="place-input" type="text" placeholder="Find a place…" />
         <button id="place-go" class="place-go-btn">Go</button>
@@ -61,12 +65,21 @@ export function initControls(map, drawContext, overlays) {
 
       <div class="section-label">Drawing</div>
       <div class="draw-info">Use toolbar (top left) to draw points, lines, and polygons. Shapes sync to all connected clients.</div>
+      </div><!-- /.panel-body -->
     </div>
   `
   document.body.appendChild(panel)
 
   const settings = initSettings()
   document.getElementById('open-settings').onclick = () => settings.open()
+
+  // Minimize / expand panel body
+  const minimizeBtn = document.getElementById('minimize-panel')
+  const panelBody = panel.querySelector('.panel-body')
+  minimizeBtn.addEventListener('click', () => {
+    const collapsed = panelBody.classList.toggle('hidden')
+    minimizeBtn.textContent = collapsed ? '+' : '−'
+  })
 
   // Base map toggle
   document.getElementById('btn-standard').onclick = () => {
