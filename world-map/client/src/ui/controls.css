@@ -164,3 +164,71 @@
 
 .place-go-btn:hover { background: #5599ff; }
 .place-go-btn:disabled { background: rgba(68,136,255,0.4); cursor: default; }
+
+.saved-count {
+  font-size: 9px;
+  color: rgba(255,255,255,0.35);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-left: 4px;
+}
+
+#saved-locations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.saved-loc-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.saved-loc-name {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255,255,255,0.82);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-loc-go {
+  background: #4488ff;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.saved-loc-go:hover { background: #5599ff; }
+
+.saved-loc-del {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.45);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.saved-loc-del:hover { color: #ff5555; border-color: rgba(255,85,85,0.4); }
+
+.saved-loc-empty {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  padding: 4px 2px;
+  font-style: italic;
+}

@@ -71,6 +71,13 @@ export function initControls(map, drawContext, overlays) {
 
       <div class="section-label">Drawing</div>
       <div class="draw-info">Use toolbar (top left) to draw. Middle-mouse or two-finger drag to tilt / rotate.</div>
+
+      <div class="section-label">Saved Places <span id="saved-count" class="saved-count"></span></div>
+      <div class="place-finder">
+        <input id="save-loc-name" class="place-input" type="text" placeholder="Name this view…" />
+        <button id="save-loc-btn" class="place-go-btn" title="Save current view">+</button>
+      </div>
+      <div id="saved-locations-list"></div>
       </div><!-- /.panel-body -->
     </div>
   `
@@ -219,6 +226,82 @@ export function initControls(map, drawContext, overlays) {
     save('wm_terrain', terrainEnabled)
     terrainEnabled ? enableTerrain(map) : disableTerrain(map)
   })
+
+  // ── Saved Places ───────────────────────────────────────────────────────────
+  const MAX_SAVED = 10
+  let savedPlaces = JSON.parse(localStorage.getItem('wm_saved_places') || '[]')
+
+  function savePlaces() {
+    localStorage.setItem('wm_saved_places', JSON.stringify(savedPlaces))
+  }
+
+  function renderSavedPlaces() {
+    const list  = document.getElementById('saved-locations-list')
+    const count = document.getElementById('saved-count')
+    count.textContent = savedPlaces.length ? `${savedPlaces.length}/10` : ''
+    list.innerHTML = ''
+
+    savedPlaces.forEach((loc, i) => {
+      const item = document.createElement('div')
+      item.className = 'saved-loc-item'
+
+      const nameEl = document.createElement('span')
+      nameEl.className = 'saved-loc-name'
+      nameEl.textContent = loc.name
+      nameEl.title = loc.name
+
+      const goBtn = document.createElement('button')
+      goBtn.className = 'saved-loc-go'
+      goBtn.textContent = 'Go'
+      goBtn.addEventListener('click', () => {
+        map.flyTo({ center: loc.center, zoom: loc.zoom,
+                    pitch: loc.pitch, bearing: loc.bearing, duration: 1500 })
+      })
+
+      const delBtn = document.createElement('button')
+      delBtn.className = 'saved-loc-del'
+      delBtn.textContent = '×'
+      delBtn.title = 'Remove'
+      delBtn.addEventListener('click', () => {
+        savedPlaces.splice(i, 1)
+        savePlaces()
+        renderSavedPlaces()
+      })
+
+      item.append(nameEl, goBtn, delBtn)
+      list.appendChild(item)
+    })
+
+    if (savedPlaces.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'saved-loc-empty'
+      empty.textContent = 'No saved places yet.'
+      list.appendChild(empty)
+    }
+  }
+
+  document.getElementById('save-loc-btn').addEventListener('click', () => {
+    if (savedPlaces.length >= MAX_SAVED) return
+    const input = document.getElementById('save-loc-name')
+    const name  = input.value.trim() || `Place ${savedPlaces.length + 1}`
+    const c     = map.getCenter()
+    savedPlaces.push({
+      name,
+      center:  [c.lng, c.lat],
+      zoom:    map.getZoom(),
+      pitch:   map.getPitch(),
+      bearing: map.getBearing()
+    })
+    savePlaces()
+    input.value = ''
+    renderSavedPlaces()
+  })
+
+  document.getElementById('save-loc-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('save-loc-btn').click()
+  })
+
+  renderSavedPlaces()
 
   // ── Public API ─────────────────────────────────────────────────────────────
   return {
