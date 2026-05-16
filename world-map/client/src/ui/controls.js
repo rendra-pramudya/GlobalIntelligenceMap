@@ -255,9 +255,10 @@ export function initControls(map, drawContext, overlays) {
       goBtn.textContent = 'Go'
       goBtn.addEventListener('click', () => {
         map.flyTo({ center: loc.center, zoom: loc.zoom,
-                    pitch: loc.pitch, bearing: loc.bearing, duration: 1500 })
-        // Restore the drawing/symbol state that was captured at save time
-        if (loc.drawState) drawContext.restoreState(loc.drawState)
+                    pitch: loc.pitch, bearing: loc.bearing, duration: 2000 })
+        if (loc.drawState) {
+          map.once('moveend', () => drawContext.restoreState(loc.drawState))
+        }
       })
 
       const delBtn = document.createElement('button')
