@@ -156,27 +156,28 @@ export function initControls(map, drawContext, overlays) {
     if (e.key === 'Enter') goToPlace()
   })
 
-  // Label layer detection — covers OpenMapTiles, OpenFreeMap Liberty, and common variants
+  // Any symbol layer that renders text — reliable across all vector-tile styles
   function getLabelLayers() {
     return (map.getStyle()?.layers || [])
-      .filter(l => {
-        if (l.type !== 'symbol') return false
-        const sl = l['source-layer'] || ''
-        if (sl === 'place' || sl === 'place_label') return true
-        const id = (l.id || '').toLowerCase()
-        return id.includes('place') || id.includes('city') || id.includes('town') ||
-               id.includes('village') || id.includes('suburb') || id.includes('state') ||
-               id.includes('country') || id.includes('capital')
-      })
+      .filter(l => l.type === 'symbol' && l.layout?.['text-field'])
       .map(l => l.id)
+  }
+
+  // Toggle both vector labels (standard map) and raster labels (satellite map)
+  function applyLabelVisibility(visible) {
+    const vis = visible ? 'visible' : 'none'
+    getLabelLayers().forEach(id => map.setLayoutProperty(id, 'visibility', vis))
+    // Satellite base map uses a raster overlay for labels
+    if (map.getLayer('satellite-labels-layer')) {
+      map.setLayoutProperty('satellite-labels-layer', 'visibility', vis)
+    }
   }
 
   // Labels toggle
   let labelsVisible = true
   document.getElementById('toggle-labels').addEventListener('change', (e) => {
     labelsVisible = e.target.checked
-    const vis = labelsVisible ? 'visible' : 'none'
-    getLabelLayers().forEach(id => map.setLayoutProperty(id, 'visibility', vis))
+    applyLabelVisibility(labelsVisible)
   })
 
   // 3D Terrain toggle
@@ -197,9 +198,7 @@ export function initControls(map, drawContext, overlays) {
         cb(key)
         // Re-apply label state once the new style has loaded
         map.once('style.load', () => {
-          if (!labelsVisible) {
-            getLabelLayers().forEach(id => map.setLayoutProperty(id, 'visibility', 'none'))
-          }
+          if (!labelsVisible) applyLabelVisibility(false)
         })
       }
     },

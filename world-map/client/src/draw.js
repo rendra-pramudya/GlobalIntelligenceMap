@@ -347,9 +347,32 @@ export function initDraw(map) {
 
   function deleteSelected() {
     const selected = draw.getSelectedIds()
+
     if (selected.length > 0) {
+      // Delete only the selected features + their linked endpoint symbols
       draw.delete(selected)
-      selected.forEach(id => socket.send(JSON.stringify({ type: 'drawing_delete', id })))
+      selected.forEach(id => {
+        socket.send(JSON.stringify({ type: 'drawing_delete', id }))
+        const symId = pathSymbols.get(id)
+        if (symId) {
+          pathSymbols.delete(id)
+          localSymbols.delete(symId)
+          socket.send(JSON.stringify({ type: 'symbol_delete', id: symId }))
+        }
+      })
+      updateSymbolSource()
+    } else {
+      // Nothing selected → clear ALL drawings and symbols
+      const allIds = draw.getAll().features.map(f => f.id)
+      draw.deleteAll()
+      allIds.forEach(id => {
+        socket.send(JSON.stringify({ type: 'drawing_delete', id }))
+      })
+      // Clear every symbol (standalone + path-linked)
+      localSymbols.forEach((_, id) => socket.send(JSON.stringify({ type: 'symbol_delete', id })))
+      localSymbols.clear()
+      pathSymbols.clear()
+      updateSymbolSource()
     }
   }
 
