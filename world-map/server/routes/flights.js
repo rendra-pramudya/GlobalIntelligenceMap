@@ -139,9 +139,10 @@ function adsbToGeoJSON(ac, sourceName) {
 // ── FR24 official ─────────────────────────────────────────────────────────────
 
 async function fetchFR24Official(apiKey, minLat, maxLat, minLon, maxLon) {
-  const url = `https://fr24api.com/api/live/flight-positions/full?bounds=${minLat},${maxLat},${minLon},${maxLon}`
+  // FR24 bounds: north,south,west,east
+  const url = `https://fr24api.flightradar24.com/api/live/flight-positions/full?bounds=${maxLat},${minLat},${minLon},${maxLon}&limit=1500`
   const r   = await fetchWithTimeout(url, {
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept-Version': 'v1' }
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept-Version': 'v1', 'Accept': 'application/json' }
   })
   if (r.status === 429) throw new HttpError(429, 'FR24 rate limited')
   if (!r.ok) throw new HttpError(r.status, `FR24 official HTTP ${r.status}: ${await r.text()}`)

@@ -128,13 +128,13 @@ async function probeFR24Feed(cfg) {
 
   if (cfg.FR24_API_KEY) {
     result.fr24_official = await timed(async () => {
-      const url = 'https://fr24api.com/api/live/flight-positions/full?bounds=45,55,5,15'
+      const url = 'https://fr24api.flightradar24.com/api/live/flight-positions/full?bounds=55,45,5,15'
       const r   = await fetchWithTimeout(url, {
-        headers: { 'Authorization': `Bearer ${cfg.FR24_API_KEY}`, 'Accept-Version': 'v1' }
+        headers: { 'Authorization': `Bearer ${cfg.FR24_API_KEY}`, 'Accept-Version': 'v1', 'Accept': 'application/json' }
       })
       if (!r.ok) throw new Error(`FR24 official HTTP ${r.status}: ${(await r.text()).slice(0, 80)}`)
       const json = await r.json()
-      return { status: 'ok', source: 'fr24api.com', configured: true, features: countFeatures(json) }
+      return { status: 'ok', source: 'fr24api.flightradar24.com', configured: true, features: countFeatures(json) }
     })
   }
 

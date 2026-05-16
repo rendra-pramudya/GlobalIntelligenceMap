@@ -133,15 +133,15 @@ export function initFlightradar(map) {
       if (!key) { console.warn('FR24: no API key — check Settings'); return }
 
       const bb  = map.getBounds()
-      // FR24 bounds: south,north,west,east (all capped to valid ranges)
-      const S = Math.max(bb.getSouth(), -90).toFixed(4)
+      // FR24 bounds format: north,south,west,east
       const N = Math.min(bb.getNorth(),  90).toFixed(4)
+      const S = Math.max(bb.getSouth(), -90).toFixed(4)
       const W = Math.max(bb.getWest(), -180).toFixed(4)
       const E = Math.min(bb.getEast(),  180).toFixed(4)
 
-      const url = `https://fr24api.flightradar24.com/api/live/flight-positions/full?bounds=${S},${N},${W},${E}`
+      const url = `https://fr24api.flightradar24.com/api/live/flight-positions/full?bounds=${N},${S},${W},${E}&limit=1500`
       const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${key}`, 'Accept-Version': 'v1' }
+        headers: { 'Authorization': `Bearer ${key}`, 'Accept-Version': 'v1', 'Accept': 'application/json' }
       })
 
       if (!res.ok) {
