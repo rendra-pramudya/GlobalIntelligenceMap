@@ -106,28 +106,21 @@ async function probeOpenSky(cfg) {
 }
 
 async function probeFR24Feed(cfg) {
-  // FR24 unofficial feed — no key needed. bounds: north,south,west,east
-  const feedResult = await timed(async () => {
-    const url = 'https://data-live.flightradar24.com/zones/fcgi/feed.js?bounds=55,45,5,15&faa=1&satellite=1&mlat=1&flarm=1&adsb=1&gnd=1&air=1&vehicles=1&estimated=1&maxage=14400&gliders=1'
-    const r = await fetchWithTimeout(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept':     'application/json',
-        'Referer':    'https://www.flightradar24.com/',
-        'Origin':     'https://www.flightradar24.com'
-      }
-    })
-    if (!r.ok) throw new Error(`FR24 feed HTTP ${r.status}`)
+  // Primary: ADS-B Exchange via adsb.lol (free, no key, works server-side)
+  const result = await timed(async () => {
+    const url = 'https://api.adsb.lol/v2/lat/1.35/lon/103.82/dist/100/'  // Singapore
+    const r   = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error(`adsb.lol HTTP ${r.status}`)
     const json = await r.json()
-    const count = Object.values(json).filter(Array.isArray).length
-    return { status: 'ok', source: 'fr24 (public feed)', configured: true, features: count }
+    const count = (json.ac || []).length
+    return { status: 'ok', source: 'adsb.lol (ADS-B Exchange)', configured: true, features: count }
   })
 
-  // If user also has an official key, probe that too and note it
+  // If user also has an official FR24 key, probe that too
   if (cfg.FR24_API_KEY) {
-    const officialResult = await timed(async () => {
+    result.fr24_official = await timed(async () => {
       const url = 'https://fr24api.com/api/live/flight-positions/full?bounds=45,55,5,15'
-      const r = await fetchWithTimeout(url, {
+      const r   = await fetchWithTimeout(url, {
         headers: { 'Authorization': `Bearer ${cfg.FR24_API_KEY}`, 'Accept-Version': 'v1' }
       })
       if (!r.ok) {
@@ -137,10 +130,9 @@ async function probeFR24Feed(cfg) {
       const json = await r.json()
       return { status: 'ok', source: 'fr24api.com (official)', configured: true, features: countFeatures(json) }
     })
-    feedResult.official_api = officialResult
   }
 
-  return feedResult
+  return result
 }
 
 async function probeWeather(cfg) {

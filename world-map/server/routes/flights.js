@@ -16,9 +16,9 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    const cfg = getConfig()
+    const cfg     = getConfig()
     const geojson = key === 'fr24'
-      ? await fetchFR24(cfg, +minLat, +maxLat, +minLon, +maxLon)
+      ? await fetchDetailed(cfg, +minLat, +maxLat, +minLon, +maxLon)
       : await fetchOpenSky(cfg, +minLat, +maxLat, +minLon, +maxLon)
 
     caches[key]    = geojson
@@ -31,82 +31,66 @@ router.get('/', async (req, res) => {
   }
 })
 
-// ── FlightRadar24 ─────────────────────────────────────────────────────────────
-// Uses the unofficial public data feed (same one the FR24 website uses).
-// No API key required. Bounds order: north,south,west,east.
-async function fetchFR24(cfg, minLat, maxLat, minLon, maxLon) {
-  // If the user supplied a paid fr24api.com key, prefer the official endpoint.
+// ── Detailed source (FR24 official → adsb.lol fallback) ───────────────────────
+async function fetchDetailed(cfg, minLat, maxLat, minLon, maxLon) {
   if (cfg.FR24_API_KEY) {
     return fetchFR24Official(cfg.FR24_API_KEY, minLat, maxLat, minLon, maxLon)
   }
-  return fetchFR24Feed(minLat, maxLat, minLon, maxLon)
+  return fetchADSBLol(minLat, maxLat, minLon, maxLon)
 }
 
-async function fetchFR24Feed(minLat, maxLat, minLon, maxLon) {
-  // FR24 public feed rejects large bounding boxes — cap to ~60°lat × 90°lon
-  // centred on the requested viewport midpoint.
-  const latMid = (minLat + maxLat) / 2
-  const lonMid = (minLon + maxLon) / 2
-  const latHalf = Math.min((maxLat - minLat) / 2, 30)   // max ±30° lat
-  const lonHalf = Math.min((maxLon - minLon) / 2, 45)   // max ±45° lon
-  minLat = Math.max(-90,  latMid - latHalf)
-  maxLat = Math.min( 90,  latMid + latHalf)
-  minLon = Math.max(-180, lonMid - lonHalf)
-  maxLon = Math.min( 180, lonMid + lonHalf)
+// ADS-B Exchange via adsb.lol — free, no key, works server-side, global coverage.
+// Uses a centre-point + radius query converted from the viewport bbox.
+async function fetchADSBLol(minLat, maxLat, minLon, maxLon) {
+  const lat    = ((minLat + maxLat) / 2).toFixed(4)
+  const lon    = ((minLon + maxLon) / 2).toFixed(4)
+  // Rough nm radius: 1° lat ≈ 60 nm; adjust for longitude compression
+  const latNm  = (maxLat - minLat) * 60 / 2
+  const lonNm  = (maxLon - minLon) * 60 / 2 * Math.cos((minLat + maxLat) / 2 * Math.PI / 180)
+  const dist   = Math.min(Math.ceil(Math.max(latNm, lonNm, 50)), 250)
 
-  // FR24 feed uses north,south,west,east (maxLat,minLat,minLon,maxLon)
-  const bounds = `${maxLat},${minLat},${minLon},${maxLon}`
-  const params = `bounds=${bounds}&faa=1&satellite=1&mlat=1&flarm=1&adsb=1&gnd=1&air=1&vehicles=1&estimated=1&maxage=14400&gliders=1&stats=1`
-  const url    = `https://data-live.flightradar24.com/zones/fcgi/feed.js?${params}`
-
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept':     'application/json, text/javascript, */*',
-      'Referer':    'https://www.flightradar24.com/',
-      'Origin':     'https://www.flightradar24.com'
-    }
-  })
-  if (!response.ok) throw new Error(`FR24 feed HTTP ${response.status}`)
-  const data = await response.json()
-  return fr24FeedToGeoJSON(data)
+  const url      = `https://api.adsb.lol/v2/lat/${lat}/lon/${lon}/dist/${dist}/`
+  const response = await fetch(url, { headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(`adsb.lol HTTP ${response.status}`)
+  const { ac } = await response.json()
+  console.log(`adsb.lol: ${(ac || []).length} aircraft at lat=${lat} lon=${lon} dist=${dist}nm`)
+  return adsbLolToGeoJSON(ac || [])
 }
 
-// Response: { full_count, version, stats, "<id>": [icao,lat,lon,hdg,alt,spd,sqwk,radar,type,reg,time,orig,dest,flight,onGnd,vspd,callsign,...] }
-function fr24FeedToGeoJSON(data) {
-  const features = []
-  for (const [id, vals] of Object.entries(data)) {
-    if (!Array.isArray(vals)) continue          // skip full_count, version, stats
-    if (vals[1] == null || vals[2] == null) continue
-    features.push({
-      type: 'Feature',
-      id,
-      geometry: { type: 'Point', coordinates: [vals[2], vals[1]] },
-      properties: {
-        callsign:    String(vals[16] || vals[13] || '').trim(),
-        flight:      String(vals[13] || '').trim(),
-        type:        vals[8]  || '',
-        reg:         vals[9]  || '',
-        origin:      vals[11] || '',
-        destination: vals[12] || '',
-        altitude:    vals[4],
-        velocity:    vals[5],
-        heading:     vals[3],
-        onGround:    vals[14] === 1,
-        source:      'fr24'
-      }
-    })
+function adsbLolToGeoJSON(ac) {
+  return {
+    type: 'FeatureCollection',
+    features: ac
+      .filter(a => a.lat != null && a.lon != null)
+      .map(a => ({
+        type: 'Feature',
+        id:   a.hex,
+        geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+        properties: {
+          callsign:    (a.flight || '').trim(),
+          flight:      (a.flight || '').trim(),
+          type:        a.t    || a.type || '',
+          reg:         a.r    || '',
+          origin:      a.orig || '',
+          destination: a.dest || '',
+          altitude:    typeof a.alt_baro === 'number' ? a.alt_baro : null,
+          velocity:    a.gs,
+          heading:     a.track,
+          onGround:    a.alt_baro === 'ground',
+          source:      'adsb.lol'
+        }
+      }))
   }
-  return { type: 'FeatureCollection', features }
 }
 
+// ── FR24 official API (fr24api.com) ──────────────────────────────────────────
 async function fetchFR24Official(apiKey, minLat, maxLat, minLon, maxLon) {
   const bounds   = `${minLat},${maxLat},${minLon},${maxLon}`
   const url      = `https://fr24api.com/api/live/flight-positions/full?bounds=${bounds}`
   const response = await fetch(url, {
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept-Version': 'v1' }
   })
-  if (!response.ok) throw new Error(`FR24 API HTTP ${response.status}: ${await response.text()}`)
+  if (!response.ok) throw new Error(`FR24 official API HTTP ${response.status}: ${await response.text()}`)
   const { data } = await response.json()
   return fr24OfficialToGeoJSON(data || [])
 }
@@ -118,7 +102,7 @@ function fr24OfficialToGeoJSON(flights) {
       .filter(f => f.lat != null && f.lon != null)
       .map(f => ({
         type: 'Feature',
-        id: f.fr24_id || f.hex,
+        id:   f.fr24_id || f.hex,
         geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
         properties: {
           callsign:    f.callsign || f.flight || '',
