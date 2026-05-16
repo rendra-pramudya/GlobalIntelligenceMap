@@ -12,11 +12,10 @@ async function main() {
   const map = await initMap('map', savedBasemap)
 
   const drawController = initDraw(map)
-  const { draw } = drawController
   initToolbar(drawController)
 
   let overlays = initOverlays(map)
-  const controls = initControls(map, draw, overlays)
+  const controls = initControls(map, drawController, overlays)
 
   // Restore saved projection (controls' style.load handler will re-apply
   // labels + terrain if this triggers a style reload)

@@ -256,6 +256,8 @@ export function initControls(map, drawContext, overlays) {
       goBtn.addEventListener('click', () => {
         map.flyTo({ center: loc.center, zoom: loc.zoom,
                     pitch: loc.pitch, bearing: loc.bearing, duration: 1500 })
+        // Restore the drawing/symbol state that was captured at save time
+        if (loc.drawState) drawContext.restoreState(loc.drawState)
       })
 
       const delBtn = document.createElement('button')
@@ -287,10 +289,11 @@ export function initControls(map, drawContext, overlays) {
     const c     = map.getCenter()
     savedPlaces.push({
       name,
-      center:  [c.lng, c.lat],
-      zoom:    map.getZoom(),
-      pitch:   map.getPitch(),
-      bearing: map.getBearing()
+      center:    [c.lng, c.lat],
+      zoom:      map.getZoom(),
+      pitch:     map.getPitch(),
+      bearing:   map.getBearing(),
+      drawState: drawContext.getState()   // snapshot drawings + icons
     })
     savePlaces()
     input.value = ''

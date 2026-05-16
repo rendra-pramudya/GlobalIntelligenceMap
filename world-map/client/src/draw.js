@@ -376,7 +376,44 @@ export function initDraw(map) {
     }
   }
 
-  return { draw, setTool, setActiveSymbol, setActiveLine, undo, deleteSelected }
+  // ── State snapshot / restore (for saved places) ──────────────────────────
+  function getState() {
+    return {
+      features: draw.getAll().features,
+      symbols:  Array.from(localSymbols.values())
+    }
+  }
+
+  function restoreState(state) {
+    if (!state) return
+
+    // ── Clear current drawings ──
+    const prevIds = draw.getAll().features.map(f => f.id)
+    draw.deleteAll()
+    prevIds.forEach(id => socket.send(JSON.stringify({ type: 'drawing_delete', id })))
+
+    // ── Clear current symbols ──
+    localSymbols.forEach((_, id) => socket.send(JSON.stringify({ type: 'symbol_delete', id })))
+    localSymbols.clear()
+    pathSymbols.clear()
+    updateSymbolSource()
+
+    // ── Restore drawings ──
+    ;(state.features || []).forEach(f => {
+      draw.add(f)
+      socket.send(JSON.stringify({ type: 'drawing_create', feature: f }))
+    })
+
+    // ── Restore symbols ──
+    ;(state.symbols || []).forEach(f => {
+      localSymbols.set(f.properties.id, f)
+      if (f.properties.pathId) pathSymbols.set(f.properties.pathId, f.properties.id)
+      socket.send(JSON.stringify({ type: 'symbol_create', feature: f }))
+    })
+    updateSymbolSource()
+  }
+
+  return { draw, setTool, setActiveSymbol, setActiveLine, undo, deleteSelected, getState, restoreState }
 }
 
 function colorExpression() {
