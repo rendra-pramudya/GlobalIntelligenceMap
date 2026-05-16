@@ -3,6 +3,13 @@ import { getConfig } from '../config.js'
 
 const router = Router()
 
+// Expose FR24 key to the browser so it can call fr24api.com directly
+// (the server environment cannot reach fr24api.com outbound)
+router.get('/fr24-key', (req, res) => {
+  const cfg = getConfig()
+  res.json({ key: cfg.FR24_API_KEY || '' })
+})
+
 // Per-source state
 const state = {
   opensky: { cache: null, fetchedAt: 0, backoffUntil: 0, ttl: 60_000 },
