@@ -1,10 +1,24 @@
 import { setProjection, enableTerrain, disableTerrain } from '../map.js'
 import { initSettings } from './settings.js'
 
+// localStorage helpers
+function load(key, fallback) {
+  const v = localStorage.getItem(key)
+  return v === null ? fallback : v
+}
+function save(key, value) { localStorage.setItem(key, value) }
+
 export function initControls(map, drawContext, overlays) {
   let _overlays = overlays
   let _onBaseMapChange = null
 
+  // ── Restore persisted settings ─────────────────────────────────────────────
+  let labelsVisible  = load('wm_labels',     'true')  !== 'false'
+  let terrainEnabled = load('wm_terrain',    'false') === 'true'
+  const savedBasemap     = load('wm_basemap',    'standard')
+  const savedProjection  = load('wm_projection', 'mercator')
+
+  // ── Panel HTML ─────────────────────────────────────────────────────────────
   const panel = document.createElement('div')
   panel.id = 'controls'
   panel.innerHTML = `
@@ -25,18 +39,18 @@ export function initControls(map, drawContext, overlays) {
 
       <div class="section-label">Base Map</div>
       <div class="basemap-toggle">
-        <button id="btn-standard" class="basemap-btn active">Standard</button>
+        <button id="btn-standard" class="basemap-btn">Standard</button>
         <button id="btn-satellite" class="basemap-btn">Satellite</button>
       </div>
 
       <div class="section-label">Projection</div>
       <div class="projection-toggle">
-        <button id="btn-mercator" class="proj-btn active">Mercator</button>
+        <button id="btn-mercator" class="proj-btn">Mercator</button>
         <button id="btn-globe" class="proj-btn">Globe</button>
       </div>
 
       <div class="section-label">Map</div>
-      <label class="layer-toggle"><input type="checkbox" id="toggle-labels" checked> City labels</label>
+      <label class="layer-toggle"><input type="checkbox" id="toggle-labels"> City labels</label>
       <label class="layer-toggle"><input type="checkbox" id="toggle-terrain"> 3D Terrain</label>
 
       <div class="section-label">Overlays</div>
@@ -56,67 +70,103 @@ export function initControls(map, drawContext, overlays) {
       </select>
 
       <div class="section-label">Drawing</div>
-      <div class="draw-info">Use toolbar (top left) to draw points, lines, and polygons. Shapes sync to all connected clients.</div>
+      <div class="draw-info">Use toolbar (top left) to draw. Middle-mouse or two-finger drag to tilt / rotate.</div>
       </div><!-- /.panel-body -->
     </div>
   `
   document.body.appendChild(panel)
 
+  // ── Restore initial UI states from localStorage ────────────────────────────
+  document.getElementById(savedBasemap === 'satellite' ? 'btn-satellite' : 'btn-standard')
+    .classList.add('active')
+  document.getElementById(savedProjection === 'globe' ? 'btn-globe' : 'btn-mercator')
+    .classList.add('active')
+  document.getElementById('toggle-labels').checked  = labelsVisible
+  document.getElementById('toggle-terrain').checked = terrainEnabled
+
+  // ── Settings modal ─────────────────────────────────────────────────────────
   const settings = initSettings()
   document.getElementById('open-settings').onclick = () => settings.open()
 
-  // Minimize / expand panel body
+  // ── Minimize ───────────────────────────────────────────────────────────────
   const minimizeBtn = document.getElementById('minimize-panel')
-  const panelBody = panel.querySelector('.panel-body')
+  const panelBody   = panel.querySelector('.panel-body')
   minimizeBtn.addEventListener('click', () => {
     const collapsed = panelBody.classList.toggle('hidden')
     minimizeBtn.textContent = collapsed ? '+' : '−'
   })
 
-  // Base map toggle
+  // ── Label helpers ──────────────────────────────────────────────────────────
+  function getLabelLayers() {
+    return (map.getStyle()?.layers || [])
+      .filter(l => l.type === 'symbol' && l.layout?.['text-field'])
+      .map(l => l.id)
+  }
+
+  function applyLabelVisibility(visible) {
+    const vis = visible ? 'visible' : 'none'
+    getLabelLayers().forEach(id => map.setLayoutProperty(id, 'visibility', vis))
+    if (map.getLayer('satellite-labels-layer'))
+      map.setLayoutProperty('satellite-labels-layer', 'visibility', vis)
+  }
+
+  // ── Persistent style.load handler ─────────────────────────────────────────
+  // Fires on every style reload (base-map switch, projection change, etc.)
+  // and re-applies all settings that get wiped by setStyle.
+  map.on('style.load', () => {
+    applyLabelVisibility(labelsVisible)
+    if (terrainEnabled) enableTerrain(map)
+  })
+
+  // Apply immediately for the current (already-loaded) style
+  applyLabelVisibility(labelsVisible)
+  if (terrainEnabled) enableTerrain(map)
+
+  // ── Base map toggle ────────────────────────────────────────────────────────
   document.getElementById('btn-standard').onclick = () => {
     document.getElementById('btn-standard').classList.add('active')
     document.getElementById('btn-satellite').classList.remove('active')
+    save('wm_basemap', 'standard')
     _onBaseMapChange?.('standard')
   }
   document.getElementById('btn-satellite').onclick = () => {
     document.getElementById('btn-satellite').classList.add('active')
     document.getElementById('btn-standard').classList.remove('active')
+    save('wm_basemap', 'satellite')
     _onBaseMapChange?.('satellite')
   }
 
-  // Projection toggle
+  // ── Projection toggle ──────────────────────────────────────────────────────
   document.getElementById('btn-mercator').onclick = () => {
     setProjection(map, 'mercator')
     document.getElementById('btn-mercator').classList.add('active')
     document.getElementById('btn-globe').classList.remove('active')
+    save('wm_projection', 'mercator')
   }
   document.getElementById('btn-globe').onclick = () => {
     setProjection(map, 'globe')
     document.getElementById('btn-globe').classList.add('active')
     document.getElementById('btn-mercator').classList.remove('active')
+    save('wm_projection', 'globe')
   }
 
-  // Layer toggles
-  function bindLayerToggles() {
-    panel.querySelectorAll('input[data-layer]').forEach(input => {
-      input.addEventListener('change', () => {
-        const layer = input.dataset.layer
-        _overlays[layer]?.toggle()
-        if (layer === 'weather') {
-          document.getElementById('weather-sub').style.display = input.checked ? '' : 'none'
-          document.getElementById('weather-select').style.display = input.checked ? '' : 'none'
-        }
-      })
+  // ── Layer toggles ──────────────────────────────────────────────────────────
+  panel.querySelectorAll('input[data-layer]').forEach(input => {
+    input.addEventListener('change', () => {
+      const layer = input.dataset.layer
+      _overlays[layer]?.toggle()
+      if (layer === 'weather') {
+        document.getElementById('weather-sub').style.display   = input.checked ? '' : 'none'
+        document.getElementById('weather-select').style.display = input.checked ? '' : 'none'
+      }
     })
-  }
-  bindLayerToggles()
+  })
 
   document.getElementById('weather-select').addEventListener('change', (e) => {
     _overlays.weather?.setLayer(e.target.value)
   })
 
-  // Place finder
+  // ── Place finder ───────────────────────────────────────────────────────────
   async function goToPlace() {
     const query = document.getElementById('place-input').value.trim()
     if (!query) return
@@ -124,7 +174,7 @@ export function initControls(map, drawContext, overlays) {
     btn.textContent = '…'
     btn.disabled = true
     try {
-      const res = await fetch(
+      const res  = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
         { headers: { 'Accept-Language': 'en' } }
       )
@@ -156,52 +206,25 @@ export function initControls(map, drawContext, overlays) {
     if (e.key === 'Enter') goToPlace()
   })
 
-  // Any symbol layer that renders text — reliable across all vector-tile styles
-  function getLabelLayers() {
-    return (map.getStyle()?.layers || [])
-      .filter(l => l.type === 'symbol' && l.layout?.['text-field'])
-      .map(l => l.id)
-  }
-
-  // Toggle both vector labels (standard map) and raster labels (satellite map)
-  function applyLabelVisibility(visible) {
-    const vis = visible ? 'visible' : 'none'
-    getLabelLayers().forEach(id => map.setLayoutProperty(id, 'visibility', vis))
-    // Satellite base map uses a raster overlay for labels
-    if (map.getLayer('satellite-labels-layer')) {
-      map.setLayoutProperty('satellite-labels-layer', 'visibility', vis)
-    }
-  }
-
-  // Labels toggle
-  let labelsVisible = true
+  // ── Labels toggle ──────────────────────────────────────────────────────────
   document.getElementById('toggle-labels').addEventListener('change', (e) => {
     labelsVisible = e.target.checked
+    save('wm_labels', labelsVisible)
     applyLabelVisibility(labelsVisible)
   })
 
-  // 3D Terrain toggle
+  // ── Terrain toggle ─────────────────────────────────────────────────────────
   document.getElementById('toggle-terrain').addEventListener('change', (e) => {
-    if (e.target.checked) {
-      enableTerrain(map)
-    } else {
-      disableTerrain(map)
-    }
+    terrainEnabled = e.target.checked
+    save('wm_terrain', terrainEnabled)
+    terrainEnabled ? enableTerrain(map) : disableTerrain(map)
   })
 
-
-
-
+  // ── Public API ─────────────────────────────────────────────────────────────
   return {
-    onBaseMapChange(cb) {
-      _onBaseMapChange = (key) => {
-        cb(key)
-        // Re-apply label state once the new style has loaded
-        map.once('style.load', () => {
-          if (!labelsVisible) applyLabelVisibility(false)
-        })
-      }
-    },
+    savedBasemap,
+    savedProjection,
+    onBaseMapChange(cb) { _onBaseMapChange = cb },
     updateOverlays(newOverlays) { _overlays = newOverlays }
   }
 }

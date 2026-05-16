@@ -26,11 +26,11 @@ export const BASE_MAPS = {
   }
 }
 
-export function initMap(containerId) {
+export function initMap(containerId, initialBasemap = 'standard') {
   return new Promise((resolve) => {
     const map = new maplibregl.Map({
       container: containerId,
-      style: BASE_MAPS.standard,
+      style: BASE_MAPS[initialBasemap],
       center: [0, 20],
       zoom: 2,
       maxZoom: 18,
