@@ -61,7 +61,7 @@ function makeVesselIcon() {
   ctx.lineWidth = 0.8
   ctx.stroke()
 
-  return { data: c, width: SIZE, height: SIZE }
+  return ctx.getImageData(0, 0, SIZE, SIZE)
 }
 
 function categoryMatchExpr(fallback) {
