@@ -663,6 +663,113 @@
 }
 .sb-save-btn:hover { background: #2d7dd2; border-color: #2d7dd2; color: #fff; }
 
+/* ── Map Style section ──────────────────────────────────────────────────────── */
+
+.ms-active-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ms-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.ms-icon-btn {
+  flex-shrink: 0;
+  background: #111316;
+  border: 1px solid #2d3238;
+  border-radius: 4px;
+  color: #6a7180;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.ms-icon-btn:hover { color: #c8ccd2; border-color: #4a4f58; background: #1f2228; }
+.ms-icon-btn.ms-del:hover { color: #ff5555; border-color: rgba(255,85,85,0.4); }
+
+.ms-info {
+  font-size: 11px;
+  color: #44aa66;
+  padding: 2px 0;
+  min-height: 16px;
+}
+
+/* ── Gridlines / Labels two-col ─────────────────────────────────────────────── */
+
+.ms-two-col {
+  display: flex;
+  gap: 8px;
+}
+
+.ms-pair-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  color: #4a4f58;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ms-mini-select {
+  background: #111316;
+  border: 1px solid #2d3238;
+  border-radius: 4px;
+  color: #c8ccd2;
+  padding: 3px 6px;
+  font-size: 11px;
+  width: 100%;
+  cursor: pointer;
+}
+.ms-mini-select:focus { border-color: #2d7dd2; outline: none; }
+
+/* ── Labels & Lines rows ────────────────────────────────────────────────────── */
+
+.ll-row {
+  display: grid;
+  grid-template-columns: 1fr 18px 22px 40px;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0;
+  border-bottom: 1px solid #22262b;
+}
+
+.ll-name {
+  font-size: 11px;
+  color: #8a9099;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ll-vis {
+  accent-color: #2d7dd2;
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
+.ll-size,
+.ll-width {
+  background: #111316;
+  border: 1px solid #2d3238;
+  border-radius: 3px;
+  color: #c8ccd2;
+  font-size: 11px;
+  padding: 2px 4px;
+  width: 100%;
+  text-align: right;
+}
+.ll-size:focus,
+.ll-width:focus { border-color: #2d7dd2; outline: none; }
+.ll-size::placeholder,
+.ll-width::placeholder { color: #3a3f48; }
+
 /* ── Country style panel ────────────────────────────────────────────────────── */
 
 .country-selected-name {

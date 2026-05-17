@@ -2,6 +2,9 @@ import { setProjection, enableTerrain, disableTerrain, setBaseMap, PROVIDERS } f
 import { initSettings } from './settings.js'
 import { initKMLLayer } from '../overlays/kmlLayer.js'
 import { initCountryStyle } from '../overlays/countryStyle.js'
+import { initGridlines } from '../overlays/gridlines.js'
+import { initLabelStyle } from './labelStyle.js'
+import { initMapStyleStore, EMPTY_STYLE } from './mapStyleStore.js'
 
 // localStorage helpers
 function load(key, fallback) {
@@ -52,6 +55,29 @@ export function initControls(map, drawContext, overlays, debug) {
     </div>
 
     <div id="sb-body">
+
+      <!-- MAP STYLES section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="mapstyles">
+          <span class="sb-section-icon">🎨</span>
+          <span class="sb-section-title">Map Style</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-mapstyles">
+          <div class="section-label">Active style</div>
+          <div class="ms-active-row">
+            <select id="ms-style-select" class="provider-select ms-select"></select>
+            <button id="ms-new-btn"  class="ms-icon-btn" title="New style">＋</button>
+            <button id="ms-dup-btn"  class="ms-icon-btn" title="Duplicate">⎘</button>
+            <button id="ms-del-btn"  class="ms-icon-btn ms-del" title="Delete">✕</button>
+          </div>
+          <div class="sb-save-row" style="margin-top:4px">
+            <input id="ms-name-input" class="sb-save-input" type="text" placeholder="Style name…" />
+            <button id="ms-save-btn" class="sb-save-btn" title="Save current settings as this style">Save</button>
+          </div>
+          <div id="ms-info" class="ms-info"></div>
+        </div>
+      </div>
 
       <!-- BASEMAP section -->
       <div class="sb-section">
@@ -157,6 +183,116 @@ export function initControls(map, drawContext, overlays, debug) {
             <button id="ap-preset-save-btn" class="sb-save-btn" title="Save current appearance as preset">+</button>
           </div>
           <div id="ap-preset-list"></div>
+        </div>
+      </div>
+
+      <!-- GRIDLINES section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="gridlines">
+          <span class="sb-section-icon">⊞</span>
+          <span class="sb-section-title">Gridlines</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-gridlines">
+          <label class="layer-toggle"><input type="checkbox" id="gl-enabled"> Show gridlines</label>
+          <div id="gl-controls">
+            <div class="ap-row ap-tint-row" style="margin-top:4px">
+              <span class="ap-label">Color</span>
+              <input type="color" class="ap-color" id="gl-color" value="#ffffff">
+              <input type="range" class="ap-slider" id="gl-opacity" min="0" max="100" step="1" value="25">
+              <span class="ap-val" id="gl-opacity-val">25%</span>
+            </div>
+            <div class="ap-row" style="margin-top:2px">
+              <span class="ap-label">Width</span>
+              <input type="range" class="ap-slider" id="gl-width" min="1" max="30" step="1" value="6">
+              <span class="ap-val" id="gl-width-val">0.6</span>
+            </div>
+            <div class="section-label" style="margin-top:6px">Spacing</div>
+            <div class="ms-two-col">
+              <label class="ms-pair-label">Lat
+                <select id="gl-lat-spacing" class="ms-mini-select">
+                  <option value="5">5°</option>
+                  <option value="10">10°</option>
+                  <option value="15">15°</option>
+                  <option value="30" selected>30°</option>
+                  <option value="45">45°</option>
+                </select>
+              </label>
+              <label class="ms-pair-label">Lon
+                <select id="gl-lon-spacing" class="ms-mini-select">
+                  <option value="5">5°</option>
+                  <option value="10">10°</option>
+                  <option value="15">15°</option>
+                  <option value="30" selected>30°</option>
+                  <option value="45">45°</option>
+                  <option value="60">60°</option>
+                  <option value="90">90°</option>
+                </select>
+              </label>
+            </div>
+            <label class="layer-toggle" style="margin-top:4px"><input type="checkbox" id="gl-labels"> Degree labels</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- LABELS & LINES section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="labellines">
+          <span class="sb-section-icon">Aa</span>
+          <span class="sb-section-title">Labels &amp; Lines</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-labellines">
+          <div id="ll-raster-notice" class="ms-info" style="display:none">
+            Labels &amp; Lines styling requires a vector tile provider (OpenFreeMap).
+          </div>
+          <div id="ll-controls">
+            <div class="section-label">Labels</div>
+            <div class="ll-row" data-label="country">
+              <span class="ll-name">Country</span>
+              <input type="checkbox" class="ll-vis" checked title="Visible">
+              <input type="color" class="ap-color ll-color" value="#ffffff" title="Color">
+              <input type="number" class="ll-size" value="" min="6" max="32" placeholder="–" title="Size (px)">
+            </div>
+            <div class="ll-row" data-label="city">
+              <span class="ll-name">City</span>
+              <input type="checkbox" class="ll-vis" checked title="Visible">
+              <input type="color" class="ap-color ll-color" value="#dddddd" title="Color">
+              <input type="number" class="ll-size" value="" min="6" max="32" placeholder="–" title="Size (px)">
+            </div>
+            <div class="ll-row" data-label="sea">
+              <span class="ll-name">Sea / Water</span>
+              <input type="checkbox" class="ll-vis" checked title="Visible">
+              <input type="color" class="ap-color ll-color" value="#88aabb" title="Color">
+              <input type="number" class="ll-size" value="" min="6" max="32" placeholder="–" title="Size (px)">
+            </div>
+            <div class="ll-row" data-label="place">
+              <span class="ll-name">Place</span>
+              <input type="checkbox" class="ll-vis" checked title="Visible">
+              <input type="color" class="ap-color ll-color" value="#cccccc" title="Color">
+              <input type="number" class="ll-size" value="" min="6" max="32" placeholder="–" title="Size (px)">
+            </div>
+            <div class="section-label" style="margin-top:6px">Lines</div>
+            <div class="ll-row" data-line="border">
+              <span class="ll-name">Borders</span>
+              <input type="checkbox" class="ll-vis" checked title="Visible">
+              <input type="color" class="ap-color ll-color" value="#ffffff" title="Color">
+              <input type="number" class="ll-width" value="" min="0.1" max="10" step="0.1" placeholder="–" title="Width (px)">
+            </div>
+            <div class="ll-row" data-line="disputed">
+              <span class="ll-name">Disputed ╌</span>
+              <input type="checkbox" class="ll-vis" checked title="Visible">
+              <input type="color" class="ap-color ll-color" value="#ff6666" title="Color">
+              <input type="number" class="ll-width" value="" min="0.1" max="10" step="0.1" placeholder="–" title="Width (px)">
+            </div>
+            <div class="ll-row" data-line="coastline">
+              <span class="ll-name">Coastlines</span>
+              <input type="checkbox" class="ll-vis" checked title="Visible">
+              <input type="color" class="ap-color ll-color" value="#aabbcc" title="Color">
+              <input type="number" class="ll-width" value="" min="0.1" max="10" step="0.1" placeholder="–" title="Width (px)">
+            </div>
+            <button id="ll-reset-btn" class="appearance-reset-btn" style="margin-top:6px;width:100%;text-align:center">↺ Reset to style defaults</button>
+          </div>
         </div>
       </div>
 
@@ -593,6 +729,226 @@ export function initControls(map, drawContext, overlays, debug) {
       applyFilter()
     }
   })()
+
+  // ── Gridlines ──────────────────────────────────────────────────────────────
+  const gridlines = initGridlines(map)
+
+  ;(function () {
+    const glEnabled  = document.getElementById('gl-enabled')
+    const glColor    = document.getElementById('gl-color')
+    const glOpacity  = document.getElementById('gl-opacity')
+    const glOpacVal  = document.getElementById('gl-opacity-val')
+    const glWidth    = document.getElementById('gl-width')
+    const glWidthVal = document.getElementById('gl-width-val')
+    const glLatSp    = document.getElementById('gl-lat-spacing')
+    const glLonSp    = document.getElementById('gl-lon-spacing')
+    const glLabels   = document.getElementById('gl-labels')
+
+    function syncUI(cfg) {
+      glEnabled.checked   = cfg.enabled
+      glColor.value       = cfg.color
+      glOpacity.value     = Math.round(cfg.opacity * 100)
+      glOpacVal.textContent = `${Math.round(cfg.opacity * 100)}%`
+      glWidth.value       = Math.round(cfg.width * 10)
+      glWidthVal.textContent = cfg.width.toFixed(1)
+      glLatSp.value       = String(cfg.latSpacing)
+      glLonSp.value       = String(cfg.lonSpacing)
+      glLabels.checked    = cfg.showLabels
+    }
+
+    function read() {
+      return {
+        enabled:    glEnabled.checked,
+        color:      glColor.value,
+        opacity:    +glOpacity.value / 100,
+        width:      +glWidth.value / 10,
+        latSpacing: +glLatSp.value,
+        lonSpacing: +glLonSp.value,
+        showLabels: glLabels.checked
+      }
+    }
+
+    function commit() { gridlines.setConfig(read()) }
+
+    glEnabled.addEventListener('change', commit)
+    glColor.addEventListener('input',  commit)
+    glOpacity.addEventListener('input', () => {
+      glOpacVal.textContent = `${glOpacity.value}%`; commit()
+    })
+    glWidth.addEventListener('input', () => {
+      glWidthVal.textContent = (+glWidth.value / 10).toFixed(1); commit()
+    })
+    glLatSp.addEventListener('change',  commit)
+    glLonSp.addEventListener('change',  commit)
+    glLabels.addEventListener('change', commit)
+
+    syncUI(gridlines.config)
+  })()
+
+  // ── Labels & Lines ──────────────────────────────────────────────────────────
+  const labelStyle = initLabelStyle(map)
+
+  ;(function () {
+    const notice   = document.getElementById('ll-raster-notice')
+    const controls = document.getElementById('ll-controls')
+
+    function updateVectorNotice() {
+      const isVec = labelStyle.isVectorStyle()
+      notice.style.display   = isVec ? 'none' : ''
+      controls.style.display = isVec ? '' : 'none'
+    }
+    map.on('style.load', updateVectorNotice)
+    updateVectorNotice()
+
+    // Label rows
+    document.querySelectorAll('#sec-labellines .ll-row[data-label]').forEach(row => {
+      const cat   = row.dataset.label
+      const vis   = row.querySelector('.ll-vis')
+      const color = row.querySelector('.ll-color')
+      const size  = row.querySelector('.ll-size')
+
+      function commit() {
+        labelStyle.setLabel(cat, {
+          visible: vis.checked ? null : false,  // null = no override when checked
+          color:   color.value,
+          size:    size.value ? +size.value : null
+        })
+      }
+      // Treating "checked" as "use default visibility" rather than forced-true
+      vis.addEventListener('change', () => {
+        labelStyle.setLabel(cat, { visible: vis.checked ? null : false })
+      })
+      color.addEventListener('input',  () => labelStyle.setLabel(cat, { color: color.value }))
+      size.addEventListener('input',   () => labelStyle.setLabel(cat, { size: size.value ? +size.value : null }))
+    })
+
+    // Line rows
+    document.querySelectorAll('#sec-labellines .ll-row[data-line]').forEach(row => {
+      const cat   = row.dataset.line
+      const vis   = row.querySelector('.ll-vis')
+      const color = row.querySelector('.ll-color')
+      const width = row.querySelector('.ll-width')
+
+      vis.addEventListener('change', () => {
+        labelStyle.setLine(cat, { visible: vis.checked ? null : false })
+      })
+      color.addEventListener('input',  () => labelStyle.setLine(cat, { color: color.value }))
+      width.addEventListener('input',  () => labelStyle.setLine(cat, { width: width.value ? +width.value : null }))
+    })
+
+    document.getElementById('ll-reset-btn').addEventListener('click', () => {
+      labelStyle.reset()
+      // Reset UI to default/checked state
+      document.querySelectorAll('#sec-labellines .ll-vis').forEach(el => { el.checked = true })
+      document.querySelectorAll('#sec-labellines .ll-size, #sec-labellines .ll-width')
+        .forEach(el => { el.value = '' })
+    })
+  })()
+
+  // ── Map Style Store ─────────────────────────────────────────────────────────
+  const msStore = initMapStyleStore()
+
+  function msCollectState() {
+    return {
+      provider:  activeProvider,
+      mapStyle:  activeStyle,
+      ..._apGetState(),
+      gridlines: gridlines.getState(),
+      ...labelStyle.getState()
+    }
+  }
+
+  function msApplyStyle(s) {
+    // 1. Provider / tile style
+    if (s.provider && (s.provider !== activeProvider || s.mapStyle !== activeStyle)) {
+      activeProvider = s.provider
+      activeStyle    = s.mapStyle || Object.keys(PROVIDERS[s.provider]?.styles ?? {})[0]
+      save('wm_provider', activeProvider)
+      save('wm_style',    activeStyle)
+      document.getElementById('provider-select').value = activeProvider
+      renderStyleButtons()
+      _onBaseMapChange?.(activeProvider, activeStyle)
+    }
+    // 2. Appearance
+    const apFields = ['brightness','contrast','saturation','gamma','tintColor','tintStrength','colorizeOn','colorizeHue']
+    const apState  = {}
+    apFields.forEach(k => { if (s[k] != null) apState[k] = s[k] })
+    if (Object.keys(apState).length) _apLoadState(apState)
+    // 3. Gridlines
+    if (s.gridlines) gridlines.setConfig(s.gridlines)
+    // 4. Labels / Lines (applied immediately; labelStyle re-applies on style.load too)
+    if (s.labels || s.lines) labelStyle.loadState({ labels: s.labels, lines: s.lines })
+  }
+
+  function msRenderSelect() {
+    const sel = document.getElementById('ms-style-select')
+    const prev = sel.value
+    sel.innerHTML = '<option value="">— unsaved —</option>'
+    msStore.styles.forEach(s => {
+      const opt = document.createElement('option')
+      opt.value = s.id
+      opt.textContent = s.name
+      sel.appendChild(opt)
+    })
+    if (msStore.styles.find(s => s.id === prev)) sel.value = prev
+  }
+
+  function msInfo(msg, ok = true) {
+    const el = document.getElementById('ms-info')
+    el.textContent = msg
+    el.style.color = ok ? '#44aa66' : '#ee6655'
+    if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = '' }, 2500)
+  }
+
+  msRenderSelect()
+
+  document.getElementById('ms-style-select').addEventListener('change', (e) => {
+    const s = msStore.getById(e.target.value)
+    if (!s) return
+    document.getElementById('ms-name-input').value = s.name
+    msApplyStyle(s)
+    msInfo(`Loaded "${s.name}"`)
+  })
+
+  document.getElementById('ms-save-btn').addEventListener('click', () => {
+    const name = document.getElementById('ms-name-input').value.trim()
+    if (!name) { msInfo('Enter a style name first', false); return }
+    const saved = msStore.save(name, msCollectState())
+    msRenderSelect()
+    document.getElementById('ms-style-select').value = saved.id
+    msInfo(`Saved "${name}"`)
+  })
+
+  document.getElementById('ms-new-btn').addEventListener('click', () => {
+    document.getElementById('ms-style-select').value = ''
+    document.getElementById('ms-name-input').value   = ''
+  })
+
+  document.getElementById('ms-dup-btn').addEventListener('click', () => {
+    const id = document.getElementById('ms-style-select').value
+    if (!id) { msInfo('Select a style to duplicate', false); return }
+    const copy = msStore.duplicate(id)
+    if (copy) {
+      msRenderSelect()
+      document.getElementById('ms-style-select').value = copy.id
+      document.getElementById('ms-name-input').value   = copy.name
+      msInfo(`Duplicated as "${copy.name}"`)
+    }
+  })
+
+  document.getElementById('ms-del-btn').addEventListener('click', () => {
+    const id   = document.getElementById('ms-style-select').value
+    const name = document.getElementById('ms-style-select').selectedOptions[0]?.text
+    if (!id) return
+    msStore.delete(id)
+    msRenderSelect()
+    document.getElementById('ms-name-input').value = ''
+    msInfo(`Deleted "${name}"`)
+  })
+
+  document.getElementById('ms-name-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('ms-save-btn').click()
+  })
 
   // ── Appearance Presets ─────────────────────────────────────────────────────
   let apPresets = JSON.parse(localStorage.getItem('wm_ap_presets') || '[]')
