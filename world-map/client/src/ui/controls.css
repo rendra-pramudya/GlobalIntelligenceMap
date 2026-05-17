@@ -640,6 +640,49 @@
 }
 .sb-save-btn:hover { background: #2d7dd2; border-color: #2d7dd2; color: #fff; }
 
+/* ── Country style panel ────────────────────────────────────────────────────── */
+
+.country-selected-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #c8ccd2;
+  padding: 4px 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-btn-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.sb-action-btn {
+  flex: 1;
+  padding: 4px 0;
+  border: 1px solid #2d3238;
+  border-radius: 4px;
+  background: #111316;
+  color: #8a9099;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+.sb-action-btn:hover {
+  background: #2d7dd2;
+  border-color: #2d7dd2;
+  color: #fff;
+}
+
+#ap-preset-list,
+#country-style-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
 /* ── Bottom icon bar ────────────────────────────────────────────────────────── */
 
 #sb-bottom {

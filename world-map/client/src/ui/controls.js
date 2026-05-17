@@ -1,6 +1,7 @@
 import { setProjection, enableTerrain, disableTerrain, setBaseMap, PROVIDERS } from '../map.js'
 import { initSettings } from './settings.js'
 import { initKMLLayer } from '../overlays/kmlLayer.js'
+import { initCountryStyle } from '../overlays/countryStyle.js'
 
 // localStorage helpers
 function load(key, fallback) {
@@ -141,6 +142,45 @@ export function initControls(map, drawContext, overlays, debug) {
               <span class="ap-val" id="ap-colorize-val">–</span>
             </div>
           </div>
+          <div class="section-label" style="margin-top:6px">
+            Presets
+          </div>
+          <div class="sb-save-row">
+            <input id="ap-preset-name" class="sb-save-input" type="text" placeholder="Preset name…" />
+            <button id="ap-preset-save-btn" class="sb-save-btn" title="Save current appearance as preset">+</button>
+          </div>
+          <div id="ap-preset-list"></div>
+        </div>
+      </div>
+
+      <!-- COUNTRY STYLE section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="country">
+          <span class="sb-section-icon">🌐</span>
+          <span class="sb-section-title">Country Style</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-country">
+          <label class="layer-toggle"><input type="checkbox" id="toggle-country-style"> Enable country selection</label>
+          <div id="country-selection-panel" style="display:none">
+            <div class="country-selected-name" id="country-selected-name">Click a country on the map</div>
+            <div class="ap-row ap-tint-row" id="country-style-row" style="display:none">
+              <span class="ap-label">Fill</span>
+              <input type="color" class="ap-color" id="country-fill-color" value="#ff4444">
+              <input type="range" class="ap-slider" id="country-fill-opacity" min="0" max="100" step="1" value="40">
+              <span class="ap-val" id="country-fill-opacity-val">40%</span>
+            </div>
+            <div class="country-btn-row" id="country-btn-row" style="display:none">
+              <button id="country-apply-btn" class="sb-action-btn">Apply</button>
+              <button id="country-remove-btn" class="sb-action-btn">Remove</button>
+              <button id="country-deselect-btn" class="sb-action-btn">Deselect</button>
+            </div>
+          </div>
+          <div class="section-label" style="margin-top:6px">
+            Styled countries
+            <button id="country-clear-all-btn" class="appearance-reset-btn" title="Clear all country styles">↺</button>
+          </div>
+          <div id="country-style-list"></div>
         </div>
       </div>
 
@@ -384,6 +424,7 @@ export function initControls(map, drawContext, overlays, debug) {
   })
 
   // ── Appearance controls ────────────────────────────────────────────────────
+  let _apGetState, _apLoadState
   ;(function () {
     // Inject SVG gamma filter into the page (invisible element)
     const svgNS = 'http://www.w3.org/2000/svg'
@@ -534,7 +575,203 @@ export function initControls(map, drawContext, overlays, debug) {
     })
 
     applyFilter()
+
+    // Expose state API for presets
+    _apGetState = () => ({ ...ap })
+    _apLoadState = (state) => {
+      Object.assign(ap, state)
+      document.getElementById('ap-brightness').value            = ap.brightness
+      document.getElementById('ap-brightness-val').textContent  = ap.brightness
+      document.getElementById('ap-saturation').value            = ap.saturation
+      document.getElementById('ap-saturation-val').textContent  = ap.saturation
+      document.getElementById('ap-gamma').value                 = ap.gamma
+      document.getElementById('ap-gamma-val').textContent       = (ap.gamma / 100).toFixed(1)
+      document.getElementById('ap-tint-strength').value         = ap.tintStrength
+      document.getElementById('ap-tint-val').textContent        = ap.tintStrength
+      document.getElementById('ap-tint-color').value            = ap.tintColor
+      syncColorizeUI()
+      applyFilter()
+    }
   })()
+
+  // ── Appearance Presets ─────────────────────────────────────────────────────
+  let apPresets = JSON.parse(localStorage.getItem('wm_ap_presets') || '[]')
+
+  function saveApPresets() {
+    localStorage.setItem('wm_ap_presets', JSON.stringify(apPresets))
+  }
+
+  function renderApPresets() {
+    const list = document.getElementById('ap-preset-list')
+    list.innerHTML = ''
+    if (!apPresets.length) {
+      const empty = document.createElement('div')
+      empty.className = 'saved-loc-empty'
+      empty.textContent = 'No presets saved yet.'
+      list.appendChild(empty)
+      return
+    }
+    apPresets.forEach((preset, i) => {
+      const row = document.createElement('div')
+      row.className = 'saved-loc-item'
+
+      const name = document.createElement('span')
+      name.className = 'saved-loc-name'
+      name.textContent = preset.name
+      name.title = preset.name
+
+      const loadBtn = document.createElement('button')
+      loadBtn.className = 'saved-loc-go'
+      loadBtn.textContent = 'Load'
+      loadBtn.addEventListener('click', () => {
+        const { name: _n, ...state } = preset
+        _apLoadState(state)
+        // Persist loaded values
+        Object.entries(state).forEach(([k, v]) => {
+          const key = `wm_ap_${k.replace(/([A-Z])/g, '_$1').toLowerCase()}`
+          save(key, v)
+        })
+      })
+
+      const delBtn = document.createElement('button')
+      delBtn.className = 'saved-loc-del'
+      delBtn.textContent = '×'
+      delBtn.title = 'Delete preset'
+      delBtn.addEventListener('click', () => {
+        apPresets.splice(i, 1)
+        saveApPresets()
+        renderApPresets()
+      })
+
+      row.append(name, loadBtn, delBtn)
+      list.appendChild(row)
+    })
+  }
+
+  document.getElementById('ap-preset-save-btn').addEventListener('click', () => {
+    const input = document.getElementById('ap-preset-name')
+    const name = input.value.trim() || `Preset ${apPresets.length + 1}`
+    apPresets.push({ name, ..._apGetState() })
+    saveApPresets()
+    input.value = ''
+    renderApPresets()
+  })
+
+  document.getElementById('ap-preset-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('ap-preset-save-btn').click()
+  })
+
+  renderApPresets()
+
+  // ── Country Style ──────────────────────────────────────────────────────────
+  const countryStyle = initCountryStyle(map)
+
+  function renderCountryStyleList() {
+    const list = document.getElementById('country-style-list')
+    list.innerHTML = ''
+    const entries = Object.entries(countryStyle.styles)
+    if (!entries.length) {
+      const empty = document.createElement('div')
+      empty.className = 'saved-loc-empty'
+      empty.textContent = 'No styled countries yet.'
+      list.appendChild(empty)
+      return
+    }
+    entries.forEach(([iso, s]) => {
+      const row = document.createElement('div')
+      row.className = 'saved-loc-item'
+
+      const swatch = document.createElement('span')
+      swatch.style.cssText = `display:inline-block;width:12px;height:12px;border-radius:2px;background:${s.color};flex-shrink:0;margin-right:4px;border:1px solid rgba(255,255,255,0.2)`
+
+      const name = document.createElement('span')
+      name.className = 'saved-loc-name'
+      name.textContent = countryStyle.getCountryName(iso)
+      name.title = iso
+
+      const delBtn = document.createElement('button')
+      delBtn.className = 'saved-loc-del'
+      delBtn.textContent = '×'
+      delBtn.title = 'Remove style'
+      delBtn.addEventListener('click', () => {
+        countryStyle.removeStyle(iso)
+      })
+
+      row.append(swatch, name, delBtn)
+      list.appendChild(row)
+    })
+  }
+
+  function syncCountryPanel(iso) {
+    const nameEl    = document.getElementById('country-selected-name')
+    const styleRow  = document.getElementById('country-style-row')
+    const btnRow    = document.getElementById('country-btn-row')
+
+    if (!iso) {
+      nameEl.textContent = 'Click a country on the map'
+      styleRow.style.display = 'none'
+      btnRow.style.display   = 'none'
+      return
+    }
+
+    const countryName = countryStyle.getCountryName(iso)
+    nameEl.textContent = countryName || iso
+
+    // Pre-fill with existing style if any
+    const existing = countryStyle.styles[iso]
+    if (existing) {
+      document.getElementById('country-fill-color').value = existing.color
+      document.getElementById('country-fill-opacity').value = Math.round(existing.opacity * 100)
+      document.getElementById('country-fill-opacity-val').textContent = `${Math.round(existing.opacity * 100)}%`
+    }
+
+    styleRow.style.display = ''
+    btnRow.style.display   = ''
+  }
+
+  countryStyle.onchange = () => {
+    renderCountryStyleList()
+    syncCountryPanel(countryStyle.selectedISO)
+  }
+  countryStyle.onselect = syncCountryPanel
+
+  document.getElementById('country-fill-opacity').addEventListener('input', (e) => {
+    document.getElementById('country-fill-opacity-val').textContent = `${e.target.value}%`
+  })
+
+  document.getElementById('country-apply-btn').addEventListener('click', () => {
+    const iso = countryStyle.selectedISO
+    if (!iso) return
+    const color   = document.getElementById('country-fill-color').value
+    const opacity = +document.getElementById('country-fill-opacity').value / 100
+    countryStyle.setStyle(iso, color, opacity)
+  })
+
+  document.getElementById('country-remove-btn').addEventListener('click', () => {
+    if (countryStyle.selectedISO) countryStyle.removeStyle(countryStyle.selectedISO)
+  })
+
+  document.getElementById('country-deselect-btn').addEventListener('click', () => {
+    countryStyle.deselect()
+  })
+
+  document.getElementById('country-clear-all-btn').addEventListener('click', () => {
+    if (Object.keys(countryStyle.styles).length === 0) return
+    countryStyle.clearAll()
+  })
+
+  document.getElementById('toggle-country-style').addEventListener('change', (e) => {
+    const panel = document.getElementById('country-selection-panel')
+    if (e.target.checked) {
+      panel.style.display = ''
+      countryStyle.enable()
+    } else {
+      panel.style.display = 'none'
+      countryStyle.disable()
+    }
+  })
+
+  renderCountryStyleList()
 
   // ── KML Import ─────────────────────────────────────────────────────────────
   const kml = initKMLLayer(map)
