@@ -71,6 +71,33 @@ export function initControls(map, drawContext, overlays, debug) {
         <option value="pressure_new">Pressure</option>
       </select>
 
+      <div class="section-label">Appearance
+        <button class="appearance-reset-btn" id="appearance-reset" title="Reset to defaults">↺</button>
+      </div>
+      <div class="appearance-controls">
+        <div class="ap-row">
+          <span class="ap-label">Brightness</span>
+          <input type="range" class="ap-slider" id="ap-brightness" min="0" max="200" step="1" value="100">
+          <span class="ap-val" id="ap-brightness-val">100</span>
+        </div>
+        <div class="ap-row">
+          <span class="ap-label">Saturation</span>
+          <input type="range" class="ap-slider" id="ap-saturation" min="0" max="200" step="1" value="100">
+          <span class="ap-val" id="ap-saturation-val">100</span>
+        </div>
+        <div class="ap-row">
+          <span class="ap-label">Gamma</span>
+          <input type="range" class="ap-slider" id="ap-gamma" min="20" max="300" step="1" value="100">
+          <span class="ap-val" id="ap-gamma-val">1.0</span>
+        </div>
+        <div class="ap-row ap-tint-row">
+          <span class="ap-label">Tint</span>
+          <input type="color" class="ap-color" id="ap-tint-color" value="#0044ff">
+          <input type="range" class="ap-slider" id="ap-tint-strength" min="0" max="60" step="1" value="0">
+          <span class="ap-val" id="ap-tint-val">0</span>
+        </div>
+      </div>
+
       <div class="section-label">Drawing</div>
       <div class="draw-info">Use toolbar (top left) to draw. Middle-mouse or two-finger drag to tilt / rotate.</div>
 
@@ -229,6 +256,126 @@ export function initControls(map, drawContext, overlays, debug) {
     save('wm_terrain', terrainEnabled)
     terrainEnabled ? enableTerrain(map) : disableTerrain(map)
   })
+
+  // ── Appearance controls ────────────────────────────────────────────────────
+  ;(function () {
+    // Inject SVG gamma filter into the page (invisible element)
+    const svgNS = 'http://www.w3.org/2000/svg'
+    const svg = document.createElementNS(svgNS, 'svg')
+    svg.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden')
+    const defs = document.createElementNS(svgNS, 'defs')
+    const filter = document.createElementNS(svgNS, 'filter')
+    filter.id = 'wm-gamma-filter'
+    ;['R', 'G', 'B'].forEach(ch => {
+      const fn = document.createElementNS(svgNS, `feFunc${ch}`)
+      fn.setAttribute('type', 'gamma')
+      fn.setAttribute('amplitude', '1')
+      fn.setAttribute('exponent', '1')
+      fn.setAttribute('offset', '0')
+      filter.appendChild(fn)
+    })
+    defs.appendChild(filter)
+    svg.appendChild(defs)
+    document.body.appendChild(svg)
+
+    // Tint overlay — sits above the map canvas, below UI
+    const tintEl = document.createElement('div')
+    tintEl.id = 'map-tint-overlay'
+    tintEl.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;mix-blend-mode:multiply;transition:background 0.15s,opacity 0.15s'
+    document.getElementById('map').appendChild(tintEl)
+
+    // Defaults
+    const DEFAULTS = { brightness: 100, saturation: 100, gamma: 100, tintColor: '#0044ff', tintStrength: 0 }
+
+    // Load persisted values
+    const ap = {
+      brightness:   +load('wm_ap_brightness',   DEFAULTS.brightness),
+      saturation:   +load('wm_ap_saturation',   DEFAULTS.saturation),
+      gamma:        +load('wm_ap_gamma',         DEFAULTS.gamma),
+      tintColor:     load('wm_ap_tint_color',    DEFAULTS.tintColor),
+      tintStrength: +load('wm_ap_tint_strength', DEFAULTS.tintStrength)
+    }
+
+    function applyFilter() {
+      const g = ap.gamma / 100      // 0.2 → 3.0
+      // Update SVG gamma exponent (gamma > 1 = darken mids, < 1 = lighten mids)
+      filter.querySelectorAll('feFunc\\R, feFuncG, feFuncB, [type=gamma]').forEach(fn => {
+        fn.setAttribute('exponent', String(g))
+      })
+      // Also update via direct DOM iteration
+      ;[...filter.children].forEach(fn => fn.setAttribute('exponent', String(g)))
+
+      const container = map.getContainer()
+      container.style.filter = [
+        'url(#wm-gamma-filter)',
+        `brightness(${ap.brightness / 100})`,
+        `saturate(${ap.saturation / 100})`
+      ].join(' ')
+
+      // Tint overlay
+      const strength = ap.tintStrength / 100
+      if (strength <= 0) {
+        tintEl.style.opacity = '0'
+      } else {
+        // Convert hex to rgb for multiply blend
+        const r = parseInt(ap.tintColor.slice(1, 3), 16)
+        const g2 = parseInt(ap.tintColor.slice(3, 5), 16)
+        const b = parseInt(ap.tintColor.slice(5, 7), 16)
+        // Multiply blend: mix white (no effect) → tint color
+        const mixR = Math.round(255 - (255 - r) * strength)
+        const mixG = Math.round(255 - (255 - g2) * strength)
+        const mixB = Math.round(255 - (255 - b) * strength)
+        tintEl.style.opacity = '1'
+        tintEl.style.backgroundColor = `rgb(${mixR},${mixG},${mixB})`
+      }
+    }
+
+    function initSlider(id, valId, key, fmt) {
+      const slider = document.getElementById(id)
+      const valEl  = document.getElementById(valId)
+      slider.value = ap[key]
+      valEl.textContent = fmt(ap[key])
+      slider.addEventListener('input', () => {
+        ap[key] = +slider.value
+        valEl.textContent = fmt(ap[key])
+        save(`wm_ap_${key}`, ap[key])
+        applyFilter()
+      })
+    }
+
+    initSlider('ap-brightness',   'ap-brightness-val', 'brightness',   v => v)
+    initSlider('ap-saturation',   'ap-saturation-val', 'saturation',   v => v)
+    initSlider('ap-gamma',        'ap-gamma-val',      'gamma',        v => (v / 100).toFixed(1))
+    initSlider('ap-tint-strength','ap-tint-val',       'tintStrength', v => v)
+
+    const colorPicker = document.getElementById('ap-tint-color')
+    colorPicker.value = ap.tintColor
+    colorPicker.addEventListener('input', () => {
+      ap.tintColor = colorPicker.value
+      save('wm_ap_tint_color', ap.tintColor)
+      applyFilter()
+    })
+
+    document.getElementById('appearance-reset').addEventListener('click', () => {
+      Object.assign(ap, DEFAULTS)
+      ;['brightness', 'saturation', 'gamma', 'tintStrength'].forEach(k => {
+        save(`wm_ap_${k}`, ap[k])
+      })
+      save('wm_ap_tint_color', ap.tintColor)
+      document.getElementById('ap-brightness').value    = ap.brightness
+      document.getElementById('ap-saturation').value    = ap.saturation
+      document.getElementById('ap-gamma').value         = ap.gamma
+      document.getElementById('ap-tint-strength').value = ap.tintStrength
+      document.getElementById('ap-tint-color').value    = ap.tintColor
+      document.getElementById('ap-brightness-val').textContent    = ap.brightness
+      document.getElementById('ap-saturation-val').textContent    = ap.saturation
+      document.getElementById('ap-gamma-val').textContent         = (ap.gamma / 100).toFixed(1)
+      document.getElementById('ap-tint-val').textContent          = ap.tintStrength
+      applyFilter()
+    })
+
+    applyFilter()
+  })()
 
   // ── Saved Places ───────────────────────────────────────────────────────────
   const MAX_SAVED = 10
