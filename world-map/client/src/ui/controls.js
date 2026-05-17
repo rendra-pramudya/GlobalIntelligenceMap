@@ -21,115 +21,166 @@ export function initControls(map, drawContext, overlays, debug) {
   let activeStyle    = load('wm_style',    'liberty')
   let isSatellite    = load('wm_satellite', 'false') === 'true'
 
-  // ── Panel HTML ─────────────────────────────────────────────────────────────
+  // ── Sidebar HTML ───────────────────────────────────────────────────────────
   const panel = document.createElement('div')
-  panel.id = 'controls'
+  panel.id = 'sidebar'
   panel.innerHTML = `
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">World Map</span>
-        <div class="panel-header-actions">
-          <button class="settings-btn" id="minimize-panel" title="Minimize">−</button>
-          <button class="settings-btn" id="open-debug" title="API Diagnostics">🔍</button>
-          <button class="settings-btn" id="open-settings" title="API Settings">⚙</button>
+    <div id="sb-top">
+      <div id="sb-logo">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="10" cy="10" r="9" stroke="#2d7dd2" stroke-width="1.5"/>
+          <ellipse cx="10" cy="10" rx="4.5" ry="9" stroke="#2d7dd2" stroke-width="1"/>
+          <line x1="1" y1="10" x2="19" y2="10" stroke="#2d7dd2" stroke-width="1"/>
+          <line x1="2.5" y1="6" x2="17.5" y2="6" stroke="#2d7dd2" stroke-width="0.75" stroke-dasharray="1 1"/>
+          <line x1="2.5" y1="14" x2="17.5" y2="14" stroke="#2d7dd2" stroke-width="0.75" stroke-dasharray="1 1"/>
+        </svg>
+        <span>Global Intelligence</span>
+      </div>
+      <div id="sb-search">
+        <input id="place-input" type="text" placeholder="Search places…" />
+        <button id="place-go">→</button>
+      </div>
+    </div>
+
+    <div id="sb-body">
+
+      <!-- BASEMAP section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="basemap">
+          <span class="sb-section-icon">🗺</span>
+          <span class="sb-section-title">Base Map</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-basemap">
+          <div class="section-label">Tile Provider</div>
+          <div class="provider-toggle">
+            <button class="provider-btn" data-provider="openfreemap">OpenFreeMap</button>
+            <button class="provider-btn" data-provider="arcgis">ArcGIS</button>
+          </div>
+          <div class="section-label">Map Style</div>
+          <div id="style-btn-row" class="style-btn-row"></div>
+          <div class="basemap-toggle" style="margin-top:4px">
+            <button id="btn-satellite" class="basemap-btn">🛰 Satellite</button>
+          </div>
+          <div class="section-label">Projection</div>
+          <div class="projection-toggle">
+            <button id="btn-mercator" class="proj-btn">Mercator</button>
+            <button id="btn-globe" class="proj-btn">Globe</button>
+          </div>
+          <div class="section-label">Options</div>
+          <label class="layer-toggle"><input type="checkbox" id="toggle-labels"> City labels</label>
+          <label class="layer-toggle"><input type="checkbox" id="toggle-terrain"> 3D Terrain</label>
         </div>
       </div>
 
-      <div class="panel-body">
-      <div class="place-finder">
-        <input id="place-input" class="place-input" type="text" placeholder="Find a place…" />
-        <button id="place-go" class="place-go-btn">Go</button>
-      </div>
-
-      <div class="section-label">Tile Provider</div>
-      <div class="provider-toggle">
-        <button class="provider-btn" data-provider="openfreemap">OpenFreeMap</button>
-        <button class="provider-btn" data-provider="arcgis">ArcGIS</button>
-      </div>
-
-      <div class="section-label">Map Style</div>
-      <div id="style-btn-row" class="style-btn-row"></div>
-      <div class="basemap-toggle" style="margin-top:5px">
-        <button id="btn-satellite" class="basemap-btn">🛰 Satellite</button>
-      </div>
-
-      <div class="section-label">Projection</div>
-      <div class="projection-toggle">
-        <button id="btn-mercator" class="proj-btn">Mercator</button>
-        <button id="btn-globe" class="proj-btn">Globe</button>
-      </div>
-
-      <div class="section-label">Map</div>
-      <label class="layer-toggle"><input type="checkbox" id="toggle-labels"> City labels</label>
-      <label class="layer-toggle"><input type="checkbox" id="toggle-terrain"> 3D Terrain</label>
-
-      <div class="section-label">Overlays</div>
-      <label class="layer-toggle"><input type="checkbox" data-layer="flights">      Flights (ADS-B / OpenSky)</label>
-      <label class="layer-toggle"><input type="checkbox" data-layer="flightradar"> Flights (ADS-B Exchange / FR24)</label>
-      <label class="layer-toggle"><input type="checkbox" data-layer="vessels">   Marine vessels</label>
-      <label class="layer-toggle"><input type="checkbox" data-layer="earthquakes"> Earthquakes</label>
-      <label class="layer-toggle"><input type="checkbox" data-layer="weather">   Weather</label>
-      <label class="layer-toggle"><input type="checkbox" data-layer="conflict">  Conflict (ACLED)</label>
-
-      <div class="section-label">KML / Data Import
-        <button class="kml-import-btn" id="kml-import-btn" title="Import KML file">＋ KML</button>
-      </div>
-      <div id="kml-file-list"></div>
-      <div class="section-label" id="weather-sub" style="display:none">Weather layer</div>
-      <select id="weather-select" style="display:none">
-        <option value="precipitation_new">Precipitation</option>
-        <option value="clouds_new">Clouds</option>
-        <option value="temp_new">Temperature</option>
-        <option value="wind_new">Wind speed</option>
-        <option value="pressure_new">Pressure</option>
-      </select>
-
-      <div class="section-label">Appearance
-        <button class="appearance-reset-btn" id="appearance-reset" title="Reset to defaults">↺</button>
-      </div>
-      <div class="appearance-controls">
-        <div class="ap-row">
-          <span class="ap-label">Brightness</span>
-          <input type="range" class="ap-slider" id="ap-brightness" min="0" max="200" step="1" value="100">
-          <span class="ap-val" id="ap-brightness-val">100</span>
+      <!-- OVERLAYS section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="overlays">
+          <span class="sb-section-icon">◉</span>
+          <span class="sb-section-title">Overlays</span>
+          <span class="sb-chevron">›</span>
         </div>
-        <div class="ap-row">
-          <span class="ap-label">Saturation</span>
-          <input type="range" class="ap-slider" id="ap-saturation" min="0" max="200" step="1" value="100">
-          <span class="ap-val" id="ap-saturation-val">100</span>
-        </div>
-        <div class="ap-row">
-          <span class="ap-label">Gamma</span>
-          <input type="range" class="ap-slider" id="ap-gamma" min="20" max="300" step="1" value="100">
-          <span class="ap-val" id="ap-gamma-val">1.0</span>
-        </div>
-        <div class="ap-row ap-tint-row">
-          <span class="ap-label">Tint</span>
-          <input type="color" class="ap-color" id="ap-tint-color" value="#0044ff">
-          <input type="range" class="ap-slider" id="ap-tint-strength" min="0" max="60" step="1" value="0">
-          <span class="ap-val" id="ap-tint-val">0</span>
-        </div>
-        <div class="ap-row ap-colorize-row">
-          <span class="ap-label">Colorize</span>
-          <label class="ap-switch" title="Enable colorize">
-            <input type="checkbox" id="ap-colorize-on">
-            <span class="ap-switch-thumb"></span>
-          </label>
-          <input type="range" class="ap-slider ap-hue-slider" id="ap-colorize-hue" min="0" max="359" step="1" value="200">
-          <span class="ap-val" id="ap-colorize-val">–</span>
+        <div class="sb-section-body" id="sec-overlays">
+          <label class="layer-toggle"><input type="checkbox" data-layer="flights"> Flights (ADS-B / OpenSky)</label>
+          <label class="layer-toggle"><input type="checkbox" data-layer="flightradar"> Flights (FR24 / ADS-B Ex)</label>
+          <label class="layer-toggle"><input type="checkbox" data-layer="vessels"> Marine vessels</label>
+          <label class="layer-toggle"><input type="checkbox" data-layer="earthquakes"> Earthquakes</label>
+          <label class="layer-toggle"><input type="checkbox" data-layer="weather"> Weather</label>
+          <label class="layer-toggle"><input type="checkbox" data-layer="conflict"> Conflict (ACLED)</label>
+          <div class="section-label" id="weather-sub" style="display:none">Weather layer</div>
+          <select id="weather-select" style="display:none">
+            <option value="precipitation_new">Precipitation</option>
+            <option value="clouds_new">Clouds</option>
+            <option value="temp_new">Temperature</option>
+            <option value="wind_new">Wind speed</option>
+            <option value="pressure_new">Pressure</option>
+          </select>
         </div>
       </div>
 
-      <div class="section-label">Drawing</div>
-      <div class="draw-info">Use toolbar (top left) to draw. Middle-mouse or two-finger drag to tilt / rotate.</div>
-
-      <div class="section-label">Saved Places <span id="saved-count" class="saved-count"></span></div>
-      <div class="place-finder">
-        <input id="save-loc-name" class="place-input" type="text" placeholder="Name this view…" />
-        <button id="save-loc-btn" class="place-go-btn" title="Save current view">+</button>
+      <!-- APPEARANCE section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="appearance">
+          <span class="sb-section-icon">◑</span>
+          <span class="sb-section-title">Appearance</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-appearance">
+          <div class="section-label">Filter
+            <button class="appearance-reset-btn" id="appearance-reset" title="Reset to defaults">↺</button>
+          </div>
+          <div class="appearance-controls">
+            <div class="ap-row">
+              <span class="ap-label">Brightness</span>
+              <input type="range" class="ap-slider" id="ap-brightness" min="0" max="200" step="1" value="100">
+              <span class="ap-val" id="ap-brightness-val">100</span>
+            </div>
+            <div class="ap-row">
+              <span class="ap-label">Saturation</span>
+              <input type="range" class="ap-slider" id="ap-saturation" min="0" max="200" step="1" value="100">
+              <span class="ap-val" id="ap-saturation-val">100</span>
+            </div>
+            <div class="ap-row">
+              <span class="ap-label">Gamma</span>
+              <input type="range" class="ap-slider" id="ap-gamma" min="20" max="300" step="1" value="100">
+              <span class="ap-val" id="ap-gamma-val">1.0</span>
+            </div>
+            <div class="ap-row ap-tint-row">
+              <span class="ap-label">Tint</span>
+              <input type="color" class="ap-color" id="ap-tint-color" value="#0044ff">
+              <input type="range" class="ap-slider" id="ap-tint-strength" min="0" max="60" step="1" value="0">
+              <span class="ap-val" id="ap-tint-val">0</span>
+            </div>
+            <div class="ap-row ap-colorize-row">
+              <span class="ap-label">Colorize</span>
+              <label class="ap-switch" title="Enable colorize">
+                <input type="checkbox" id="ap-colorize-on">
+                <span class="ap-switch-thumb"></span>
+              </label>
+              <input type="range" class="ap-slider ap-hue-slider" id="ap-colorize-hue" min="0" max="359" step="1" value="200">
+              <span class="ap-val" id="ap-colorize-val">–</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div id="saved-locations-list"></div>
-      </div><!-- /.panel-body -->
+
+      <!-- KML section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="kml">
+          <span class="sb-section-icon">📂</span>
+          <span class="sb-section-title">Data Import</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-kml">
+          <div class="section-label">KML Files
+            <button class="kml-import-btn" id="kml-import-btn" title="Import KML file">＋ KML</button>
+          </div>
+          <div id="kml-file-list"></div>
+        </div>
+      </div>
+
+      <!-- SAVED PLACES section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="places">
+          <span class="sb-section-icon">★</span>
+          <span class="sb-section-title">Saved Places</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-places">
+          <div class="section-label">Save view <span id="saved-count" class="saved-count"></span></div>
+          <div class="sb-save-row">
+            <input id="save-loc-name" class="sb-save-input" type="text" placeholder="Name this view…" />
+            <button id="save-loc-btn" class="sb-save-btn" title="Save current view">+</button>
+          </div>
+          <div id="saved-locations-list"></div>
+        </div>
+      </div>
+
+    </div><!-- /#sb-body -->
+
+    <div id="sb-bottom">
+      <button id="open-debug" title="API Diagnostics">🔍</button>
+      <button id="open-settings" title="Settings">⚙</button>
     </div>
   `
   document.body.appendChild(panel)
@@ -145,12 +196,20 @@ export function initControls(map, drawContext, overlays, debug) {
   document.getElementById('open-settings').onclick = () => settings.open()
   document.getElementById('open-debug').onclick    = () => debug?.open()
 
-  // ── Minimize ───────────────────────────────────────────────────────────────
-  const minimizeBtn = document.getElementById('minimize-panel')
-  const panelBody   = panel.querySelector('.panel-body')
-  minimizeBtn.addEventListener('click', () => {
-    const collapsed = panelBody.classList.toggle('hidden')
-    minimizeBtn.textContent = collapsed ? '+' : '−'
+  // ── Accordion sections ─────────────────────────────────────────────────────
+  document.querySelectorAll('.sb-section-header').forEach(header => {
+    const body    = header.nextElementSibling
+    const chevron = header.querySelector('.sb-chevron')
+    const key     = 'wm_sec_' + header.dataset.section
+    if (load(key, 'open') === 'closed') {
+      body.classList.add('collapsed')
+      chevron.classList.add('rotated')
+    }
+    header.addEventListener('click', () => {
+      const closed = body.classList.toggle('collapsed')
+      chevron.classList.toggle('rotated', closed)
+      save(key, closed ? 'closed' : 'open')
+    })
   })
 
   // ── Label helpers ──────────────────────────────────────────────────────────
