@@ -326,6 +326,104 @@
 .ap-color::-webkit-color-swatch-wrapper { padding: 2px; }
 .ap-color::-webkit-color-swatch { border-radius: 2px; border: none; }
 
+/* ── KML import ────────────────────────────────────────────────────────────── */
+
+.kml-import-btn {
+  background: rgba(68,136,255,0.18);
+  border: 1px solid rgba(68,136,255,0.4);
+  border-radius: 4px;
+  color: #7aacff;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  letter-spacing: 0.3px;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.kml-import-btn:hover {
+  background: rgba(68,136,255,0.35);
+  color: #fff;
+}
+
+#kml-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.kml-empty {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  font-style: italic;
+  padding: 2px 0;
+}
+
+.kml-row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto auto auto;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 2px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.kml-chk {
+  accent-color: #4488ff;
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kml-name {
+  font-size: 12px;
+  color: rgba(255,255,255,0.82);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kml-count {
+  font-size: 10px;
+  color: rgba(255,255,255,0.3);
+  white-space: nowrap;
+}
+
+.kml-action-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.kml-action-btn:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
+.kml-action-btn.kml-del:hover { color: #ff5555; border-color: rgba(255,85,85,0.4); }
+
+/* drag-over highlight */
+#map.kml-drag-over::after {
+  content: 'Drop KML here';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(68,136,255,0.18);
+  border: 3px dashed rgba(68,136,255,0.7);
+  color: #7aacff;
+  font-size: 20px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 999;
+  letter-spacing: 1px;
+}
+
 .saved-loc-empty {
   font-size: 11px;
   color: rgba(255,255,255,0.3);

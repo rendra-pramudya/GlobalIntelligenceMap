@@ -1,5 +1,6 @@
 import { setProjection, enableTerrain, disableTerrain } from '../map.js'
 import { initSettings } from './settings.js'
+import { initKMLLayer } from '../overlays/kmlLayer.js'
 
 // localStorage helpers
 function load(key, fallback) {
@@ -62,6 +63,10 @@ export function initControls(map, drawContext, overlays, debug) {
       <label class="layer-toggle"><input type="checkbox" data-layer="weather">   Weather</label>
       <label class="layer-toggle"><input type="checkbox" data-layer="conflict">  Conflict (ACLED)</label>
 
+      <div class="section-label">KML / Data Import
+        <button class="kml-import-btn" id="kml-import-btn" title="Import KML file">＋ KML</button>
+      </div>
+      <div id="kml-file-list"></div>
       <div class="section-label" id="weather-sub" style="display:none">Weather layer</div>
       <select id="weather-select" style="display:none">
         <option value="precipitation_new">Precipitation</option>
@@ -376,6 +381,76 @@ export function initControls(map, drawContext, overlays, debug) {
 
     applyFilter()
   })()
+
+  // ── KML Import ─────────────────────────────────────────────────────────────
+  const kml = initKMLLayer(map)
+
+  function renderKMLList() {
+    const list = document.getElementById('kml-file-list')
+    list.innerHTML = ''
+    if (!kml.files.length) {
+      const empty = document.createElement('div')
+      empty.className = 'kml-empty'
+      empty.textContent = 'No files imported yet.'
+      list.appendChild(empty)
+      return
+    }
+    kml.files.forEach(f => {
+      const row = document.createElement('div')
+      row.className = 'kml-row'
+
+      const chk = document.createElement('input')
+      chk.type    = 'checkbox'
+      chk.checked = f.visible
+      chk.className = 'kml-chk'
+      chk.addEventListener('change', () => kml.setVisible(f.id, chk.checked))
+
+      const name = document.createElement('span')
+      name.className   = 'kml-name'
+      name.textContent = f.name
+      name.title       = f.name
+
+      const count = document.createElement('span')
+      count.className   = 'kml-count'
+      count.textContent = `${f.geojson.features.length}`
+
+      const fitBtn = document.createElement('button')
+      fitBtn.className   = 'kml-action-btn'
+      fitBtn.textContent = '⊙'
+      fitBtn.title       = 'Zoom to layer'
+      fitBtn.addEventListener('click', () => kml.fitToFile(f.id))
+
+      const delBtn = document.createElement('button')
+      delBtn.className   = 'kml-action-btn kml-del'
+      delBtn.textContent = '×'
+      delBtn.title       = 'Remove'
+      delBtn.addEventListener('click', () => kml.remove(f.id))
+
+      row.append(chk, name, count, fitBtn, delBtn)
+      list.appendChild(row)
+    })
+  }
+
+  kml.onchange = renderKMLList
+  renderKMLList()
+
+  document.getElementById('kml-import-btn').addEventListener('click', () => kml.openFilePicker())
+
+  // Drag-and-drop KML onto the map canvas
+  const mapEl = document.getElementById('map')
+  mapEl.addEventListener('dragover', (e) => {
+    if ([...e.dataTransfer.items].some(i => i.kind === 'file')) {
+      e.preventDefault()
+      mapEl.classList.add('kml-drag-over')
+    }
+  })
+  mapEl.addEventListener('dragleave', () => mapEl.classList.remove('kml-drag-over'))
+  mapEl.addEventListener('drop', (e) => {
+    e.preventDefault()
+    mapEl.classList.remove('kml-drag-over')
+    kml.handleDrop(e.dataTransfer)
+    kml.onchange = () => { renderKMLList(); kml.onchange = renderKMLList }
+  })
 
   // ── Saved Places ───────────────────────────────────────────────────────────
   const MAX_SAVED = 10

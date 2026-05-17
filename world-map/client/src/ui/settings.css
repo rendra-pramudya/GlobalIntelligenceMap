@@ -175,6 +175,36 @@
   padding-right: 8px;
 }
 
+/* KML feature popup */
+.kml-popup-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #7aacff;
+  margin-bottom: 4px;
+}
+.kml-popup-desc {
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 5px;
+  line-height: 1.4;
+  max-height: 80px;
+  overflow-y: auto;
+}
+.kml-popup-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 11px;
+}
+.kml-popup-table td {
+  padding: 2px 4px;
+  vertical-align: top;
+}
+.kml-popup-table td:first-child {
+  color: rgba(255,255,255,0.4);
+  white-space: nowrap;
+  padding-right: 8px;
+}
+
 .settings-actions {
   display: flex;
   align-items: center;
