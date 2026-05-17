@@ -1,4 +1,4 @@
-import { setProjection, enableTerrain, disableTerrain } from '../map.js'
+import { setProjection, enableTerrain, disableTerrain, setBaseMap, PROVIDERS } from '../map.js'
 import { initSettings } from './settings.js'
 import { initKMLLayer } from '../overlays/kmlLayer.js'
 
@@ -16,8 +16,10 @@ export function initControls(map, drawContext, overlays, debug) {
   // ── Restore persisted settings ─────────────────────────────────────────────
   let labelsVisible  = load('wm_labels',     'true')  !== 'false'
   let terrainEnabled = load('wm_terrain',    'false') === 'true'
-  const savedBasemap     = load('wm_basemap',    'standard')
   const savedProjection  = load('wm_projection', 'mercator')
+  let activeProvider = load('wm_provider', 'openfreemap')
+  let activeStyle    = load('wm_style',    'liberty')
+  let isSatellite    = load('wm_satellite', 'false') === 'true'
 
   // ── Panel HTML ─────────────────────────────────────────────────────────────
   const panel = document.createElement('div')
@@ -39,10 +41,16 @@ export function initControls(map, drawContext, overlays, debug) {
         <button id="place-go" class="place-go-btn">Go</button>
       </div>
 
-      <div class="section-label">Base Map</div>
-      <div class="basemap-toggle">
-        <button id="btn-standard" class="basemap-btn">Standard</button>
-        <button id="btn-satellite" class="basemap-btn">Satellite</button>
+      <div class="section-label">Tile Provider</div>
+      <div class="provider-toggle">
+        <button class="provider-btn" data-provider="openfreemap">OpenFreeMap</button>
+        <button class="provider-btn" data-provider="arcgis">ArcGIS</button>
+      </div>
+
+      <div class="section-label">Map Style</div>
+      <div id="style-btn-row" class="style-btn-row"></div>
+      <div class="basemap-toggle" style="margin-top:5px">
+        <button id="btn-satellite" class="basemap-btn">🛰 Satellite</button>
       </div>
 
       <div class="section-label">Projection</div>
@@ -127,8 +135,6 @@ export function initControls(map, drawContext, overlays, debug) {
   document.body.appendChild(panel)
 
   // ── Restore initial UI states from localStorage ────────────────────────────
-  document.getElementById(savedBasemap === 'satellite' ? 'btn-satellite' : 'btn-standard')
-    .classList.add('active')
   document.getElementById(savedProjection === 'globe' ? 'btn-globe' : 'btn-mercator')
     .classList.add('active')
   document.getElementById('toggle-labels').checked  = labelsVisible
@@ -173,19 +179,66 @@ export function initControls(map, drawContext, overlays, debug) {
   applyLabelVisibility(labelsVisible)
   if (terrainEnabled) enableTerrain(map)
 
-  // ── Base map toggle ────────────────────────────────────────────────────────
-  document.getElementById('btn-standard').onclick = () => {
-    document.getElementById('btn-standard').classList.add('active')
-    document.getElementById('btn-satellite').classList.remove('active')
-    save('wm_basemap', 'standard')
-    _onBaseMapChange?.('standard')
+  // ── Provider + style switcher ──────────────────────────────────────────────
+  function renderStyleButtons() {
+    const row = document.getElementById('style-btn-row')
+    row.innerHTML = ''
+    const styles = PROVIDERS[activeProvider]?.styles ?? {}
+    Object.entries(styles).forEach(([key, { label }]) => {
+      const btn = document.createElement('button')
+      btn.className = 'style-btn' + (key === activeStyle && !isSatellite ? ' active' : '')
+      btn.textContent = label
+      btn.dataset.style = key
+      btn.addEventListener('click', () => {
+        if (isSatellite) {
+          isSatellite = false
+          save('wm_satellite', 'false')
+          document.getElementById('btn-satellite').classList.remove('active')
+        }
+        activeStyle = key
+        save('wm_style', key)
+        row.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        _onBaseMapChange?.(activeProvider, activeStyle)
+      })
+      row.appendChild(btn)
+    })
   }
-  document.getElementById('btn-satellite').onclick = () => {
-    document.getElementById('btn-satellite').classList.add('active')
-    document.getElementById('btn-standard').classList.remove('active')
-    save('wm_basemap', 'satellite')
-    _onBaseMapChange?.('satellite')
+
+  function renderProviderButtons() {
+    panel.querySelectorAll('.provider-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.provider === activeProvider)
+      btn.addEventListener('click', () => {
+        activeProvider = btn.dataset.provider
+        save('wm_provider', activeProvider)
+        // Default to first style of new provider
+        activeStyle = Object.keys(PROVIDERS[activeProvider].styles)[0]
+        save('wm_style', activeStyle)
+        panel.querySelectorAll('.provider-btn').forEach(b =>
+          b.classList.toggle('active', b.dataset.provider === activeProvider))
+        renderStyleButtons()
+        if (!isSatellite) _onBaseMapChange?.(activeProvider, activeStyle)
+      })
+    })
   }
+
+  renderProviderButtons()
+  renderStyleButtons()
+
+  document.getElementById('btn-satellite').classList.toggle('active', isSatellite)
+  document.getElementById('btn-satellite').addEventListener('click', () => {
+    isSatellite = !isSatellite
+    save('wm_satellite', isSatellite)
+    document.getElementById('btn-satellite').classList.toggle('active', isSatellite)
+    document.getElementById('style-btn-row')
+      .querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'))
+    if (!isSatellite) {
+      document.getElementById('style-btn-row')
+        .querySelector(`[data-style="${activeStyle}"]`)?.classList.add('active')
+    }
+    _onBaseMapChange?.(isSatellite ? 'satellite' : activeProvider,
+                       isSatellite ? 'satellite' : activeStyle)
+  })
 
   // ── Projection toggle ──────────────────────────────────────────────────────
   document.getElementById('btn-mercator').onclick = () => {
@@ -580,7 +633,9 @@ export function initControls(map, drawContext, overlays, debug) {
 
   // ── Public API ─────────────────────────────────────────────────────────────
   return {
-    savedBasemap,
+    savedProvider:   activeProvider,
+    savedStyle:      activeStyle,
+    savedIsSatellite: isSatellite,
     savedProjection,
     onBaseMapChange(cb) { _onBaseMapChange = cb },
     updateOverlays(newOverlays) { _overlays = newOverlays }

@@ -1,36 +1,74 @@
 import maplibregl from 'maplibre-gl'
 
-export const BASE_MAPS = {
-  standard: 'https://tiles.openfreemap.org/styles/liberty',
-  satellite: {
+// ── Helper: build a simple raster-only MapLibre style ─────────────────────
+function rasterStyle(tileUrl, attribution = '© Esri') {
+  return {
     version: 8,
     sources: {
-      satellite: {
-        type: 'raster',
-        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256,
-        maxzoom: 19,
-        attribution: '© Esri, Maxar, Earthstar Geographics'
-      },
-      'satellite-labels': {
-        type: 'raster',
-        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256,
-        maxzoom: 19
-      }
+      base: { type: 'raster', tiles: [tileUrl], tileSize: 256, attribution }
     },
-    layers: [
-      { id: 'satellite-bg', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 22 },
-      { id: 'satellite-labels-layer', type: 'raster', source: 'satellite-labels', minzoom: 0, maxzoom: 22, paint: { 'raster-opacity': 0.8 } }
-    ]
+    layers: [{ id: 'base-layer', type: 'raster', source: 'base' }]
   }
 }
 
-export function initMap(containerId, initialBasemap = 'standard') {
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
+const ESRI_ATTR = '© Esri, HERE, Garmin, OpenStreetMap contributors'
+
+export const PROVIDERS = {
+  openfreemap: {
+    label: 'OpenFreeMap',
+    styles: {
+      liberty:  { label: 'Liberty',  url: 'https://tiles.openfreemap.org/styles/liberty' },
+      bright:   { label: 'Bright',   url: 'https://tiles.openfreemap.org/styles/bright' },
+      positron: { label: 'Positron', url: 'https://tiles.openfreemap.org/styles/positron' }
+    }
+  },
+  arcgis: {
+    label: 'ArcGIS',
+    styles: {
+      streets:  { label: 'Streets',  url: rasterStyle(`${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      topo:     { label: 'Topo',     url: rasterStyle(`${ESRI}/World_Topo_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      gray:     { label: 'Gray',     url: rasterStyle(`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      dark:     { label: 'Dark',     url: rasterStyle(`${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      natgeo:   { label: 'NatGeo',   url: rasterStyle(`${ESRI}/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) }
+    }
+  }
+}
+
+export const SATELLITE_STYLE = {
+  version: 8,
+  sources: {
+    satellite: {
+      type: 'raster',
+      tiles: [`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`],
+      tileSize: 256, maxzoom: 19,
+      attribution: '© Esri, Maxar, Earthstar Geographics'
+    },
+    'satellite-labels': {
+      type: 'raster',
+      tiles: [`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`],
+      tileSize: 256, maxzoom: 19
+    }
+  },
+  layers: [
+    { id: 'satellite-bg',          type: 'raster', source: 'satellite' },
+    { id: 'satellite-labels-layer', type: 'raster', source: 'satellite-labels',
+      paint: { 'raster-opacity': 0.8 } }
+  ]
+}
+
+// Resolve a { provider, style } pair (or 'satellite') to a MapLibre style
+export function resolveStyle(provider, style) {
+  if (provider === 'satellite') return SATELLITE_STYLE
+  return PROVIDERS[provider]?.styles[style]?.url ?? PROVIDERS.openfreemap.styles.liberty.url
+}
+
+
+export function initMap(containerId, initialProvider = 'openfreemap', initialStyle = 'liberty') {
   return new Promise((resolve) => {
     const map = new maplibregl.Map({
       container: containerId,
-      style: BASE_MAPS[initialBasemap],
+      style: resolveStyle(initialProvider, initialStyle),
       center: [0, 20],
       zoom: 2,
       maxZoom: 18,
@@ -131,9 +169,9 @@ export function setProjection(map, projection) {
   }
 }
 
-export function setBaseMap(map, baseMapKey, onReady) {
+export function setBaseMap(map, provider, style, onReady) {
   map.once('style.load', onReady)
-  map.setStyle(BASE_MAPS[baseMapKey])
+  map.setStyle(resolveStyle(provider, style))
 }
 
 const TERRAIN_SOURCE = {

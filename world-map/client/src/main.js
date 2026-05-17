@@ -9,9 +9,15 @@ import './ui/settings.css'
 import './ui/debug.css'
 
 async function main() {
-  // Load saved base map so the map initialises with the right style immediately
-  const savedBasemap = localStorage.getItem('wm_basemap') || 'standard'
-  const map = await initMap('map', savedBasemap)
+  const savedProvider  = localStorage.getItem('wm_provider')  || 'openfreemap'
+  const savedStyle     = localStorage.getItem('wm_style')     || 'liberty'
+  const savedSatellite = localStorage.getItem('wm_satellite') === 'true'
+
+  const map = await initMap(
+    'map',
+    savedSatellite ? 'satellite' : savedProvider,
+    savedSatellite ? 'satellite' : savedStyle
+  )
 
   const drawController = initDraw(map)
   initToolbar(drawController)
@@ -21,23 +27,20 @@ async function main() {
   let overlays = initOverlays(map)
   const controls = initControls(map, drawController, overlays, debug)
 
-  // Restore saved projection (controls' style.load handler will re-apply
-  // labels + terrain if this triggers a style reload)
   if (controls.savedProjection !== 'mercator') {
     setProjection(map, controls.savedProjection)
   }
 
-  controls.onBaseMapChange((baseMapKey) => {
+  controls.onBaseMapChange((provider, style) => {
     const wasVisible = Object.fromEntries(
       Object.entries(overlays).map(([k, o]) => [k, o.visible])
     )
-    setBaseMap(map, baseMapKey, () => {
+    setBaseMap(map, provider, style, () => {
       overlays = initOverlays(map)
       for (const [name, visible] of Object.entries(wasVisible)) {
         if (visible) overlays[name]?.show()
       }
       controls.updateOverlays(overlays)
-      // labels + terrain are re-applied by controls' persistent style.load handler
     })
   })
 }

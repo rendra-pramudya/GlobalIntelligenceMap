@@ -69,13 +69,15 @@
 }
 
 .basemap-toggle,
-.projection-toggle {
+.projection-toggle,
+.provider-toggle {
   display: flex;
   gap: 6px;
 }
 
 .basemap-btn,
-.proj-btn {
+.proj-btn,
+.provider-btn {
   flex: 1;
   padding: 5px 0;
   border: 1px solid rgba(255,255,255,0.2);
@@ -88,10 +90,41 @@
 }
 
 .basemap-btn.active,
-.proj-btn.active {
+.proj-btn.active,
+.provider-btn.active {
   background: rgba(255,255,255,0.15);
   color: #fff;
   border-color: rgba(255,255,255,0.4);
+}
+
+/* Dynamic style buttons row */
+.style-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.style-btn {
+  padding: 4px 8px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.style-btn.active {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border-color: rgba(255,255,255,0.4);
+}
+
+.style-btn:hover:not(.active) {
+  color: rgba(255,255,255,0.85);
+  border-color: rgba(255,255,255,0.3);
 }
 
 .layer-toggle {
