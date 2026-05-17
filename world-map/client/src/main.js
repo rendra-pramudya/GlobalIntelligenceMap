@@ -9,15 +9,17 @@ import './ui/settings.css'
 import './ui/debug.css'
 
 async function main() {
-  const savedProvider  = localStorage.getItem('wm_provider')  || 'openfreemap'
-  const savedStyle     = localStorage.getItem('wm_style')     || 'liberty'
-  const savedSatellite = localStorage.getItem('wm_satellite') === 'true'
+  // Migrate old satellite flag before reading provider/style
+  if (localStorage.getItem('wm_satellite') === 'true') {
+    localStorage.setItem('wm_provider', 'satellite')
+    localStorage.setItem('wm_style', 'imagery')
+    localStorage.setItem('wm_satellite', 'false')
+  }
 
-  const map = await initMap(
-    'map',
-    savedSatellite ? 'satellite' : savedProvider,
-    savedSatellite ? 'satellite' : savedStyle
-  )
+  const savedProvider = localStorage.getItem('wm_provider') || 'openfreemap'
+  const savedStyle    = localStorage.getItem('wm_style')    || 'liberty'
+
+  const map = await initMap('map', savedProvider, savedStyle)
 
   const drawController = initDraw(map)
   initToolbar(drawController)

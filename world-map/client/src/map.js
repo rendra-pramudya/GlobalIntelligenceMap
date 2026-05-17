@@ -1,41 +1,22 @@
 import maplibregl from 'maplibre-gl'
 
 // ── Helper: build a simple raster-only MapLibre style ─────────────────────
-function rasterStyle(tileUrl, attribution = '© Esri') {
+function rasterStyle(tileUrl, attribution = '', tileSize = 256) {
+  const tiles = Array.isArray(tileUrl) ? tileUrl : [tileUrl]
   return {
     version: 8,
-    sources: {
-      base: { type: 'raster', tiles: [tileUrl], tileSize: 256, attribution }
-    },
-    layers: [{ id: 'base-layer', type: 'raster', source: 'base' }]
+    sources: { base: { type: 'raster', tiles, tileSize, attribution } },
+    layers:  [{ id: 'base-layer', type: 'raster', source: 'base' }]
   }
 }
 
-const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
-const ESRI_ATTR = '© Esri, HERE, Garmin, OpenStreetMap contributors'
+const ESRI  = 'https://server.arcgisonline.com/ArcGIS/rest/services'
+const ESRI_ATTR  = '© Esri, HERE, Garmin, OpenStreetMap contributors'
+const CARTO_ATTR = '© OpenStreetMap contributors © CARTO'
+const USGS_ATTR  = 'USGS The National Map'
 
-export const PROVIDERS = {
-  openfreemap: {
-    label: 'OpenFreeMap',
-    styles: {
-      liberty:  { label: 'Liberty',  url: 'https://tiles.openfreemap.org/styles/liberty' },
-      bright:   { label: 'Bright',   url: 'https://tiles.openfreemap.org/styles/bright' },
-      positron: { label: 'Positron', url: 'https://tiles.openfreemap.org/styles/positron' }
-    }
-  },
-  arcgis: {
-    label: 'ArcGIS',
-    styles: {
-      streets:  { label: 'Streets',  url: rasterStyle(`${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
-      topo:     { label: 'Topo',     url: rasterStyle(`${ESRI}/World_Topo_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
-      gray:     { label: 'Gray',     url: rasterStyle(`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
-      dark:     { label: 'Dark',     url: rasterStyle(`${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
-      natgeo:   { label: 'NatGeo',   url: rasterStyle(`${ESRI}/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) }
-    }
-  }
-}
-
-export const SATELLITE_STYLE = {
+// Satellite imagery: ArcGIS World Imagery + reference label overlay
+const SATELLITE_STYLE = {
   version: 8,
   sources: {
     satellite: {
@@ -51,16 +32,63 @@ export const SATELLITE_STYLE = {
     }
   },
   layers: [
-    { id: 'satellite-bg',          type: 'raster', source: 'satellite' },
+    { id: 'satellite-bg',           type: 'raster', source: 'satellite' },
     { id: 'satellite-labels-layer', type: 'raster', source: 'satellite-labels',
       paint: { 'raster-opacity': 0.8 } }
   ]
 }
 
-// Resolve a { provider, style } pair (or 'satellite') to a MapLibre style
+export const PROVIDERS = {
+  openfreemap: {
+    label: 'OpenFreeMap',
+    styles: {
+      liberty:  { label: 'Liberty',  url: 'https://tiles.openfreemap.org/styles/liberty' },
+      bright:   { label: 'Bright',   url: 'https://tiles.openfreemap.org/styles/bright' },
+      positron: { label: 'Positron', url: 'https://tiles.openfreemap.org/styles/positron' }
+    }
+  },
+  arcgis: {
+    label: 'ArcGIS',
+    styles: {
+      streets: { label: 'Streets', url: rasterStyle(`${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      topo:    { label: 'Topo',    url: rasterStyle(`${ESRI}/World_Topo_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      gray:    { label: 'Gray',    url: rasterStyle(`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      dark:    { label: 'Dark',    url: rasterStyle(`${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) },
+      natgeo:  { label: 'NatGeo', url: rasterStyle(`${ESRI}/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}`, ESRI_ATTR) }
+    }
+  },
+  carto: {
+    label: 'CartoDB',
+    styles: {
+      dark:    { label: 'Dark Matter', url: rasterStyle('https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', CARTO_ATTR) },
+      light:   { label: 'Positron',   url: rasterStyle('https://{a-d}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', CARTO_ATTR) },
+      voyager: { label: 'Voyager',    url: rasterStyle('https://{a-d}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', CARTO_ATTR) }
+    }
+  },
+  usgs: {
+    label: 'USGS',
+    styles: {
+      topo:    { label: 'Topo',         url: rasterStyle('https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', USGS_ATTR) },
+      imagery: { label: 'Imagery',      url: rasterStyle('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', USGS_ATTR) },
+      hybrid:  { label: 'Hybrid',       url: rasterStyle('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}', USGS_ATTR) },
+      relief:  { label: 'Shaded Relief',url: rasterStyle('https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}', USGS_ATTR) }
+    }
+  },
+  satellite: {
+    label: '🛰 Satellite',
+    styles: {
+      imagery: { label: 'World Imagery', url: SATELLITE_STYLE }
+    }
+  }
+}
+
+// Keep SATELLITE_STYLE export for any code that still references it
+export { SATELLITE_STYLE }
+
+// Resolve a { provider, style } pair to a MapLibre style object or URL
 export function resolveStyle(provider, style) {
-  if (provider === 'satellite') return SATELLITE_STYLE
-  return PROVIDERS[provider]?.styles[style]?.url ?? PROVIDERS.openfreemap.styles.liberty.url
+  return PROVIDERS[provider]?.styles[style]?.url
+      ?? PROVIDERS.openfreemap.styles.liberty.url
 }
 
 

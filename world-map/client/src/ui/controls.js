@@ -20,7 +20,15 @@ export function initControls(map, drawContext, overlays, debug) {
   const savedProjection  = load('wm_projection', 'mercator')
   let activeProvider = load('wm_provider', 'openfreemap')
   let activeStyle    = load('wm_style',    'liberty')
-  let isSatellite    = load('wm_satellite', 'false') === 'true'
+
+  // Migrate old satellite flag to provider entry
+  if (load('wm_satellite', 'false') === 'true') {
+    activeProvider = 'satellite'
+    activeStyle    = 'imagery'
+    save('wm_provider',  'satellite')
+    save('wm_style',     'imagery')
+    save('wm_satellite', 'false')
+  }
 
   // ── Sidebar HTML ───────────────────────────────────────────────────────────
   const panel = document.createElement('div')
@@ -54,15 +62,9 @@ export function initControls(map, drawContext, overlays, debug) {
         </div>
         <div class="sb-section-body" id="sec-basemap">
           <div class="section-label">Tile Provider</div>
-          <div class="provider-toggle">
-            <button class="provider-btn" data-provider="openfreemap">OpenFreeMap</button>
-            <button class="provider-btn" data-provider="arcgis">ArcGIS</button>
-          </div>
+          <select id="provider-select" class="provider-select"></select>
           <div class="section-label">Map Style</div>
           <div id="style-btn-row" class="style-btn-row"></div>
-          <div class="basemap-toggle" style="margin-top:4px">
-            <button id="btn-satellite" class="basemap-btn">🛰 Satellite</button>
-          </div>
           <div class="section-label">Projection</div>
           <div class="projection-toggle">
             <button id="btn-mercator" class="proj-btn">Mercator</button>
@@ -283,22 +285,32 @@ export function initControls(map, drawContext, overlays, debug) {
   applyLabelVisibility(labelsVisible)
   if (terrainEnabled) enableTerrain(map)
 
-  // ── Provider + style switcher ──────────────────────────────────────────────
+  // ── Provider dropdown + style buttons ─────────────────────────────────────
+  function renderProviderSelect() {
+    const sel = document.getElementById('provider-select')
+    sel.innerHTML = ''
+    Object.entries(PROVIDERS).forEach(([key, { label }]) => {
+      const opt = document.createElement('option')
+      opt.value = key
+      opt.textContent = label
+      sel.appendChild(opt)
+    })
+    sel.value = activeProvider
+  }
+
   function renderStyleButtons() {
     const row = document.getElementById('style-btn-row')
     row.innerHTML = ''
     const styles = PROVIDERS[activeProvider]?.styles ?? {}
-    Object.entries(styles).forEach(([key, { label }]) => {
+    const entries = Object.entries(styles)
+    // Hide style row when provider has only one style (e.g. satellite)
+    row.style.display = entries.length <= 1 ? 'none' : ''
+    entries.forEach(([key, { label }]) => {
       const btn = document.createElement('button')
-      btn.className = 'style-btn' + (key === activeStyle && !isSatellite ? ' active' : '')
+      btn.className = 'style-btn' + (key === activeStyle ? ' active' : '')
       btn.textContent = label
       btn.dataset.style = key
       btn.addEventListener('click', () => {
-        if (isSatellite) {
-          isSatellite = false
-          save('wm_satellite', 'false')
-          document.getElementById('btn-satellite').classList.remove('active')
-        }
         activeStyle = key
         save('wm_style', key)
         row.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'))
@@ -309,39 +321,16 @@ export function initControls(map, drawContext, overlays, debug) {
     })
   }
 
-  function renderProviderButtons() {
-    panel.querySelectorAll('.provider-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.provider === activeProvider)
-      btn.addEventListener('click', () => {
-        activeProvider = btn.dataset.provider
-        save('wm_provider', activeProvider)
-        // Default to first style of new provider
-        activeStyle = Object.keys(PROVIDERS[activeProvider].styles)[0]
-        save('wm_style', activeStyle)
-        panel.querySelectorAll('.provider-btn').forEach(b =>
-          b.classList.toggle('active', b.dataset.provider === activeProvider))
-        renderStyleButtons()
-        if (!isSatellite) _onBaseMapChange?.(activeProvider, activeStyle)
-      })
-    })
-  }
-
-  renderProviderButtons()
+  renderProviderSelect()
   renderStyleButtons()
 
-  document.getElementById('btn-satellite').classList.toggle('active', isSatellite)
-  document.getElementById('btn-satellite').addEventListener('click', () => {
-    isSatellite = !isSatellite
-    save('wm_satellite', isSatellite)
-    document.getElementById('btn-satellite').classList.toggle('active', isSatellite)
-    document.getElementById('style-btn-row')
-      .querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'))
-    if (!isSatellite) {
-      document.getElementById('style-btn-row')
-        .querySelector(`[data-style="${activeStyle}"]`)?.classList.add('active')
-    }
-    _onBaseMapChange?.(isSatellite ? 'satellite' : activeProvider,
-                       isSatellite ? 'satellite' : activeStyle)
+  document.getElementById('provider-select').addEventListener('change', (e) => {
+    activeProvider = e.target.value
+    save('wm_provider', activeProvider)
+    activeStyle = Object.keys(PROVIDERS[activeProvider].styles)[0]
+    save('wm_style', activeStyle)
+    renderStyleButtons()
+    _onBaseMapChange?.(activeProvider, activeStyle)
   })
 
   // ── Projection toggle ──────────────────────────────────────────────────────
@@ -942,7 +931,6 @@ export function initControls(map, drawContext, overlays, debug) {
   return {
     savedProvider:   activeProvider,
     savedStyle:      activeStyle,
-    savedIsSatellite: isSatellite,
     savedProjection,
     onBaseMapChange(cb) { _onBaseMapChange = cb },
     updateOverlays(newOverlays) { _overlays = newOverlays }
