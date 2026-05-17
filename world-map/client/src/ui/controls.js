@@ -101,6 +101,15 @@ export function initControls(map, drawContext, overlays, debug) {
           <input type="range" class="ap-slider" id="ap-tint-strength" min="0" max="60" step="1" value="0">
           <span class="ap-val" id="ap-tint-val">0</span>
         </div>
+        <div class="ap-row ap-colorize-row">
+          <span class="ap-label">Colorize</span>
+          <label class="ap-switch" title="Enable colorize">
+            <input type="checkbox" id="ap-colorize-on">
+            <span class="ap-switch-thumb"></span>
+          </label>
+          <input type="range" class="ap-slider ap-hue-slider" id="ap-colorize-hue" min="0" max="359" step="1" value="200">
+          <span class="ap-val" id="ap-colorize-val">–</span>
+        </div>
       </div>
 
       <div class="section-label">Drawing</div>
@@ -290,48 +299,51 @@ export function initControls(map, drawContext, overlays, debug) {
     document.getElementById('map').appendChild(tintEl)
 
     // Defaults
-    const DEFAULTS = { brightness: 100, saturation: 100, gamma: 100, tintColor: '#0044ff', tintStrength: 0 }
+    const DEFAULTS = {
+      brightness: 100, saturation: 100, gamma: 100,
+      tintColor: '#0044ff', tintStrength: 0,
+      colorizeOn: false, colorizeHue: 200
+    }
 
     // Load persisted values
     const ap = {
-      brightness:   +load('wm_ap_brightness',   DEFAULTS.brightness),
-      saturation:   +load('wm_ap_saturation',   DEFAULTS.saturation),
-      gamma:        +load('wm_ap_gamma',         DEFAULTS.gamma),
-      tintColor:     load('wm_ap_tint_color',    DEFAULTS.tintColor),
-      tintStrength: +load('wm_ap_tint_strength', DEFAULTS.tintStrength)
+      brightness:   +load('wm_ap_brightness',    DEFAULTS.brightness),
+      saturation:   +load('wm_ap_saturation',    DEFAULTS.saturation),
+      gamma:        +load('wm_ap_gamma',          DEFAULTS.gamma),
+      tintColor:     load('wm_ap_tint_color',     DEFAULTS.tintColor),
+      tintStrength: +load('wm_ap_tint_strength',  DEFAULTS.tintStrength),
+      colorizeOn:    load('wm_ap_colorize_on',    'false') === 'true',
+      colorizeHue:  +load('wm_ap_colorize_hue',   DEFAULTS.colorizeHue)
     }
 
     function applyFilter() {
-      const g = ap.gamma / 100      // 0.2 → 3.0
-      // Update SVG gamma exponent (gamma > 1 = darken mids, < 1 = lighten mids)
-      filter.querySelectorAll('feFunc\\R, feFuncG, feFuncB, [type=gamma]').forEach(fn => {
-        fn.setAttribute('exponent', String(g))
-      })
-      // Also update via direct DOM iteration
+      const g = ap.gamma / 100
       ;[...filter.children].forEach(fn => fn.setAttribute('exponent', String(g)))
 
-      const container = map.getContainer()
-      container.style.filter = [
-        'url(#wm-gamma-filter)',
-        `brightness(${ap.brightness / 100})`,
-        `saturate(${ap.saturation / 100})`
-      ].join(' ')
+      const parts = ['url(#wm-gamma-filter)']
+
+      // Colorize: desaturate then re-hue via sepia + hue-rotate
+      // sepia() gives a warm ~30° hue base; subtract that offset so the
+      // slider value maps 1-to-1 to the visible hue on the map.
+      if (ap.colorizeOn) {
+        const rotated = ((ap.colorizeHue - 30) + 360) % 360
+        parts.push('grayscale(1)', 'sepia(1)', `hue-rotate(${rotated}deg)`)
+      }
+
+      parts.push(`brightness(${ap.brightness / 100})`, `saturate(${ap.saturation / 100})`)
+      map.getContainer().style.filter = parts.join(' ')
 
       // Tint overlay
       const strength = ap.tintStrength / 100
       if (strength <= 0) {
         tintEl.style.opacity = '0'
       } else {
-        // Convert hex to rgb for multiply blend
-        const r = parseInt(ap.tintColor.slice(1, 3), 16)
+        const r  = parseInt(ap.tintColor.slice(1, 3), 16)
         const g2 = parseInt(ap.tintColor.slice(3, 5), 16)
-        const b = parseInt(ap.tintColor.slice(5, 7), 16)
-        // Multiply blend: mix white (no effect) → tint color
-        const mixR = Math.round(255 - (255 - r) * strength)
-        const mixG = Math.round(255 - (255 - g2) * strength)
-        const mixB = Math.round(255 - (255 - b) * strength)
+        const b  = parseInt(ap.tintColor.slice(5, 7), 16)
+        const mix = v => Math.round(255 - (255 - v) * strength)
         tintEl.style.opacity = '1'
-        tintEl.style.backgroundColor = `rgb(${mixR},${mixG},${mixB})`
+        tintEl.style.backgroundColor = `rgb(${mix(r)},${mix(g2)},${mix(b)})`
       }
     }
 
@@ -361,21 +373,51 @@ export function initControls(map, drawContext, overlays, debug) {
       applyFilter()
     })
 
+    // Colorize toggle + hue slider
+    const colorizeChk = document.getElementById('ap-colorize-on')
+    const colorizeHueSlider = document.getElementById('ap-colorize-hue')
+    const colorizeVal = document.getElementById('ap-colorize-val')
+
+    function syncColorizeUI() {
+      colorizeChk.checked = ap.colorizeOn
+      colorizeHueSlider.value = ap.colorizeHue
+      colorizeHueSlider.disabled = !ap.colorizeOn
+      colorizeHueSlider.style.opacity = ap.colorizeOn ? '1' : '0.35'
+      colorizeVal.textContent = ap.colorizeOn ? `${ap.colorizeHue}°` : '–'
+    }
+
+    colorizeChk.addEventListener('change', () => {
+      ap.colorizeOn = colorizeChk.checked
+      save('wm_ap_colorize_on', ap.colorizeOn)
+      syncColorizeUI()
+      applyFilter()
+    })
+    colorizeHueSlider.addEventListener('input', () => {
+      ap.colorizeHue = +colorizeHueSlider.value
+      colorizeVal.textContent = `${ap.colorizeHue}°`
+      save('wm_ap_colorize_hue', ap.colorizeHue)
+      applyFilter()
+    })
+
+    syncColorizeUI()
+
     document.getElementById('appearance-reset').addEventListener('click', () => {
       Object.assign(ap, DEFAULTS)
-      ;['brightness', 'saturation', 'gamma', 'tintStrength'].forEach(k => {
+      ;['brightness', 'saturation', 'gamma', 'tintStrength', 'colorizeHue'].forEach(k => {
         save(`wm_ap_${k}`, ap[k])
       })
       save('wm_ap_tint_color', ap.tintColor)
+      save('wm_ap_colorize_on', ap.colorizeOn)
       document.getElementById('ap-brightness').value    = ap.brightness
       document.getElementById('ap-saturation').value    = ap.saturation
       document.getElementById('ap-gamma').value         = ap.gamma
       document.getElementById('ap-tint-strength').value = ap.tintStrength
       document.getElementById('ap-tint-color').value    = ap.tintColor
-      document.getElementById('ap-brightness-val').textContent    = ap.brightness
-      document.getElementById('ap-saturation-val').textContent    = ap.saturation
-      document.getElementById('ap-gamma-val').textContent         = (ap.gamma / 100).toFixed(1)
-      document.getElementById('ap-tint-val').textContent          = ap.tintStrength
+      document.getElementById('ap-brightness-val').textContent = ap.brightness
+      document.getElementById('ap-saturation-val').textContent = ap.saturation
+      document.getElementById('ap-gamma-val').textContent      = (ap.gamma / 100).toFixed(1)
+      document.getElementById('ap-tint-val').textContent       = ap.tintStrength
+      syncColorizeUI()
       applyFilter()
     })
 
