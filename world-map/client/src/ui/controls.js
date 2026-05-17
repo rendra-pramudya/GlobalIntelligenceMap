@@ -117,6 +117,11 @@ export function initControls(map, drawContext, overlays, debug) {
               <span class="ap-val" id="ap-brightness-val">100</span>
             </div>
             <div class="ap-row">
+              <span class="ap-label">Contrast</span>
+              <input type="range" class="ap-slider" id="ap-contrast" min="0" max="200" step="1" value="100">
+              <span class="ap-val" id="ap-contrast-val">100</span>
+            </div>
+            <div class="ap-row">
               <span class="ap-label">Saturation</span>
               <input type="range" class="ap-slider" id="ap-saturation" min="0" max="200" step="1" value="100">
               <span class="ap-val" id="ap-saturation-val">100</span>
@@ -453,7 +458,7 @@ export function initControls(map, drawContext, overlays, debug) {
 
     // Defaults
     const DEFAULTS = {
-      brightness: 100, saturation: 100, gamma: 100,
+      brightness: 100, contrast: 100, saturation: 100, gamma: 100,
       tintColor: '#0044ff', tintStrength: 0,
       colorizeOn: false, colorizeHue: 200
     }
@@ -461,6 +466,7 @@ export function initControls(map, drawContext, overlays, debug) {
     // Load persisted values
     const ap = {
       brightness:   +load('wm_ap_brightness',    DEFAULTS.brightness),
+      contrast:     +load('wm_ap_contrast',      DEFAULTS.contrast),
       saturation:   +load('wm_ap_saturation',    DEFAULTS.saturation),
       gamma:        +load('wm_ap_gamma',          DEFAULTS.gamma),
       tintColor:     load('wm_ap_tint_color',     DEFAULTS.tintColor),
@@ -483,7 +489,7 @@ export function initControls(map, drawContext, overlays, debug) {
         parts.push('grayscale(1)', 'sepia(1)', `hue-rotate(${rotated}deg)`)
       }
 
-      parts.push(`brightness(${ap.brightness / 100})`, `saturate(${ap.saturation / 100})`)
+      parts.push(`brightness(${ap.brightness / 100})`, `contrast(${ap.contrast / 100})`, `saturate(${ap.saturation / 100})`)
       map.getContainer().style.filter = parts.join(' ')
 
       // Tint overlay
@@ -514,6 +520,7 @@ export function initControls(map, drawContext, overlays, debug) {
     }
 
     initSlider('ap-brightness',   'ap-brightness-val', 'brightness',   v => v)
+    initSlider('ap-contrast',     'ap-contrast-val',   'contrast',     v => v)
     initSlider('ap-saturation',   'ap-saturation-val', 'saturation',   v => v)
     initSlider('ap-gamma',        'ap-gamma-val',      'gamma',        v => (v / 100).toFixed(1))
     initSlider('ap-tint-strength','ap-tint-val',       'tintStrength', v => v)
@@ -556,17 +563,19 @@ export function initControls(map, drawContext, overlays, debug) {
 
     document.getElementById('appearance-reset').addEventListener('click', () => {
       Object.assign(ap, DEFAULTS)
-      ;['brightness', 'saturation', 'gamma', 'tintStrength', 'colorizeHue'].forEach(k => {
+      ;['brightness', 'contrast', 'saturation', 'gamma', 'tintStrength', 'colorizeHue'].forEach(k => {
         save(`wm_ap_${k}`, ap[k])
       })
       save('wm_ap_tint_color', ap.tintColor)
       save('wm_ap_colorize_on', ap.colorizeOn)
       document.getElementById('ap-brightness').value    = ap.brightness
+      document.getElementById('ap-contrast').value      = ap.contrast
       document.getElementById('ap-saturation').value    = ap.saturation
       document.getElementById('ap-gamma').value         = ap.gamma
       document.getElementById('ap-tint-strength').value = ap.tintStrength
       document.getElementById('ap-tint-color').value    = ap.tintColor
       document.getElementById('ap-brightness-val').textContent = ap.brightness
+      document.getElementById('ap-contrast-val').textContent   = ap.contrast
       document.getElementById('ap-saturation-val').textContent = ap.saturation
       document.getElementById('ap-gamma-val').textContent      = (ap.gamma / 100).toFixed(1)
       document.getElementById('ap-tint-val').textContent       = ap.tintStrength
@@ -582,6 +591,8 @@ export function initControls(map, drawContext, overlays, debug) {
       Object.assign(ap, state)
       document.getElementById('ap-brightness').value            = ap.brightness
       document.getElementById('ap-brightness-val').textContent  = ap.brightness
+      document.getElementById('ap-contrast').value              = ap.contrast
+      document.getElementById('ap-contrast-val').textContent    = ap.contrast
       document.getElementById('ap-saturation').value            = ap.saturation
       document.getElementById('ap-saturation-val').textContent  = ap.saturation
       document.getElementById('ap-gamma').value                 = ap.gamma
