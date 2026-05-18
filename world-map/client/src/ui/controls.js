@@ -387,7 +387,7 @@ export function initControls(map, drawContext, overlays, debug) {
     exportBtn.disabled = true
     exportBtn.title    = 'Exporting…'
     try {
-      await exportGeotiff(map)
+      await exportGeotiff(map, `${activeProvider}_${activeStyle}`)
     } finally {
       exportBtn.disabled = false
       exportBtn.title    = 'Export view as GeoTIFF'

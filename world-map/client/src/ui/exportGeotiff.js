@@ -112,7 +112,12 @@ function buildGeotiff4326(width, height, rgb, west, north, east, south) {
   return buf
 }
 
-export async function exportGeotiff(map) {
+function fmtCoord(deg, posLetter, negLetter) {
+  const letter = deg >= 0 ? posLetter : negLetter
+  return Math.abs(deg).toFixed(4) + letter
+}
+
+export async function exportGeotiff(map, styleName = 'map') {
   const bounds = map.getBounds()
   const west  = bounds.getWest()
   const east  = bounds.getEast()
@@ -142,9 +147,13 @@ export async function exportGeotiff(map) {
 
   const buf = buildGeotiff4326(w, h, rgb, west, north, east, south)
 
-  const now = new Date()
-  const ts  = now.toISOString().replace(/[-:]/g, '').slice(0, 13).replace('T', '_')
-  const filename = `map_${ts}.tif`
+  // e.g. liberty_45.2300N122.4500W_12.3400S80.1200E.tif
+  const nwLat = fmtCoord(north, 'N', 'S')
+  const nwLon = fmtCoord(west,  'E', 'W')
+  const seLat = fmtCoord(south, 'N', 'S')
+  const seLon = fmtCoord(east,  'E', 'W')
+  const safeStyle = styleName.replace(/[^a-z0-9_-]/gi, '_')
+  const filename = `${safeStyle}_${nwLat}${nwLon}_${seLat}${seLon}.tif`
 
   const blob = new Blob([buf], { type: 'image/tiff' })
   const url  = URL.createObjectURL(blob)
