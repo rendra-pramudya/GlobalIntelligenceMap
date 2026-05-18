@@ -6,14 +6,14 @@ const ON_OVERRIDES = {
 
 // Each row: [left = line combo, right = tool or symbol]
 const ROWS = [
-  { line: ['STROKE', 'RED'],    right: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
-  { line: ['FILL',   'RED'],    right: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
-  { line: ['DASHED', 'RED'],    right: { kind: 'tool',   name: 'PEN',         mode: 'freehand_line',    title: 'Draw line' } },
-  { line: ['ARROW',  'RED'],    right: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
-  { line: ['STROKE', 'YELLOW'], right: { kind: 'symbol', name: 'LOCATION',  title: 'Location' } },
-  { line: ['FILL',   'YELLOW'], right: { kind: 'symbol', name: 'EXPLOSION', title: 'Explosion' } },
-  { line: ['DASHED', 'YELLOW'], right: { kind: 'symbol', name: 'PULSE',     title: 'Pulse' } },
-  { line: ['ARROW',  'YELLOW'], right: { kind: 'symbol', name: 'CIRCLE',    title: 'Circle' } },
+  { line: ['STROKE', 'RED'],    lineMode: 'freehand_line',    right: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
+  { line: ['FILL',   'RED'],    lineMode: 'freehand_line',    right: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
+  { line: ['DASHED', 'RED'],    lineMode: 'freehand_line',    right: { kind: 'tool',   name: 'PEN',         mode: 'freehand_line',    title: 'Draw line' } },
+  { line: ['ARROW',  'RED'],    lineMode: 'freehand_polygon', right: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
+  { line: ['STROKE', 'YELLOW'], lineMode: 'freehand_line',    right: { kind: 'symbol', name: 'LOCATION',  title: 'Location' } },
+  { line: ['FILL',   'YELLOW'], lineMode: 'freehand_line',    right: { kind: 'symbol', name: 'EXPLOSION', title: 'Explosion' } },
+  { line: ['DASHED', 'YELLOW'], lineMode: 'freehand_line',    right: { kind: 'symbol', name: 'PULSE',     title: 'Pulse' } },
+  { line: ['ARROW',  'YELLOW'], lineMode: 'freehand_polygon', right: { kind: 'symbol', name: 'CIRCLE',    title: 'Circle' } },
 ]
 
 function cap(s) { return s.charAt(0) + s.slice(1).toLowerCase() }
@@ -106,7 +106,7 @@ export function initToolbar(drawController) {
     })
   }
 
-  ROWS.forEach(({ line: [type, color], right }) => {
+  ROWS.forEach(({ line: [type, color], lineMode, right }) => {
     // ── Left: line combo ────────────────────────────────────────────────────
     const lBtn = document.createElement('button')
     lBtn.className = 'tool-btn'
@@ -124,7 +124,7 @@ export function initToolbar(drawController) {
         activeTool = null; activeSymbol = null
         activeLineType = type; activeLineColor = color
         drawController.setActiveSymbol(null)
-        drawController.setTool('draw_line_string')
+        drawController.setTool(lineMode)
         drawController.setActiveLine(type, color)
         syncAll()
       }
