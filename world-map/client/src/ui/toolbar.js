@@ -1,23 +1,32 @@
 import './toolbar.css'
 
-const ON_OVERRIDES = {
-  PUBLIC_HELICOPTER: '/icons/PUBLICK_HELICOPTER_ON.png'
-}
-
-// Each row: [left = line combo, right = tool or symbol]
 const ROWS = [
-  { line: ['STROKE', 'RED'],    lineMode: 'freehand_line',    right: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
-  { line: ['FILL',   'RED'],    lineMode: 'freehand_line',    right: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
-  { line: ['DASHED', 'RED'],    lineMode: 'freehand_line',    right: { kind: 'tool',   name: 'PEN',         mode: 'freehand_line',    title: 'Draw line' } },
-  { line: ['ARROW',  'RED'],    lineMode: 'freehand_polygon', right: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
-  { line: ['STROKE', 'YELLOW'], lineMode: 'freehand_line',    right: { kind: 'symbol', name: 'LOCATION',  title: 'Location' } },
-  { line: ['FILL',   'YELLOW'], lineMode: 'freehand_line',    right: { kind: 'symbol', name: 'EXPLOSION', title: 'Explosion' } },
-  { line: ['DASHED', 'YELLOW'], lineMode: 'freehand_line',    right: { kind: 'symbol', name: 'PULSE',     title: 'Pulse' } },
-  { line: ['ARROW',  'YELLOW'], lineMode: 'freehand_polygon', right: { kind: 'symbol', name: 'CIRCLE',    title: 'Circle' } },
+  { L: { kind: 'line',   type: 'STROKE', color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
+  { L: { kind: 'line',   type: 'FILL',   color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
+  { L: { kind: 'line',   type: 'DASHED', color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'PEN',         mode: 'freehand_line',    title: 'Draw line' } },
+  { L: { kind: 'line',   type: 'ARROW',  color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
+  { L: { kind: 'line',   type: 'STROKE', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'action', name: 'UNDO',   title: 'Undo' } },
+  { L: { kind: 'line',   type: 'FILL',   color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'action', name: 'DELETE', title: 'Delete selected' } },
+  { L: { kind: 'line',   type: 'DASHED', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'symbol', name: 'RADAR', title: 'Radar' } },
+  { L: { kind: 'line',   type: 'ARROW',  color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'symbol', name: 'DRONE', title: 'Drone' } },
+  { L: { kind: 'symbol', name: 'SOLDIER'    }, R: { kind: 'slot', name: 'SOLDIER',    num: 1 } },
+  { L: { kind: 'symbol', name: 'JETFIGHTER' }, R: { kind: 'slot', name: 'JETFIGHTER', num: 2 } },
+  { L: { kind: 'symbol', name: 'ROCKET'     }, R: { kind: 'slot', name: 'ROCKET',     num: 3 } },
+  { L: { kind: 'symbol', name: 'TANK'       }, R: { kind: 'slot', name: 'TANK',       num: 4 } },
+  { L: { kind: 'symbol', name: 'HELICOPTER' }, R: { kind: 'slot', name: 'HELICOPTER', num: 5 } },
+  { L: { kind: 'symbol', name: 'PULSE'      }, R: { kind: 'slot', name: 'PULSE',      num: 6 } },
+  { L: { kind: 'symbol', name: 'CIRCLE'     }, R: { kind: 'slot', name: 'CIRCLE',     num: 7 } },
 ]
 
+// Keyboard shortcuts 1-7 map to these symbols in order
+const SLOT_SYMBOLS = ['SOLDIER', 'JETFIGHTER', 'ROCKET', 'TANK', 'HELICOPTER', 'PULSE', 'CIRCLE']
+
 function cap(s) { return s.charAt(0) + s.slice(1).toLowerCase() }
-function onIcon(name) { return ON_OVERRIDES[name] ?? `/icons/${name}_ON.png` }
+function offIcon(name) { return `/icons/${name}_OFF.png` }
+function onIcon(name) {
+  const ov = { PUBLIC_HELICOPTER: '/icons/PUBLICK_HELICOPTER_ON.png' }
+  return ov[name] ?? `/icons/${name}_ON.png`
+}
 
 export function initToolbar(drawController) {
   let activeTool      = 'INTERACTIVE'
@@ -73,111 +82,165 @@ export function initToolbar(drawController) {
     localStorage.setItem('wm_toolbar_pos', JSON.stringify({ x: r.left, y: r.top }))
   })
 
-  // ── Unified grid ──────────────────────────────────────────────────────────
+  // ── Grid ──────────────────────────────────────────────────────────────────
   const grid = document.createElement('div')
   grid.className = 'toolbar-grid'
   panel.appendChild(grid)
 
+  // Registries
   const lineBtns   = {}  // `${type}_${color}` → btn
   const toolBtns   = {}  // name → { btn, img }
-  const symbolBtns = {}  // name → { btn, img }
+  // symbolRefs: name → [{ btn, img, followIcon }]
+  // followIcon=true: icon switches ON/OFF with state (left symbol btns)
+  // followIcon=false: icon stays OFF, only outline changes (slot btns)
+  const symbolRefs  = {}
+
+  function regSym(name, btn, img, followIcon) {
+    ;(symbolRefs[name] = symbolRefs[name] || []).push({ btn, img, followIcon })
+  }
 
   function clearLine() {
     if (!activeLineType) return
     const k = `${activeLineType}_${activeLineColor}`
-    if (lineBtns[k]) lineBtns[k].classList.remove('active')
+    lineBtns[k]?.classList.remove('active')
     activeLineType = null; activeLineColor = null
   }
 
+  function armSymbol(name) {
+    if (activeSymbol === name) {
+      activeSymbol = null
+      drawController.setActiveSymbol(null)
+    } else {
+      clearLine()
+      if (activeTool !== 'PEN') { activeTool = null }
+      activeSymbol = name
+      drawController.setActiveSymbol(name)
+    }
+    syncAll()
+  }
+
   function syncAll() {
-    ROWS.forEach(({ line: [t, c], right }) => {
-      lineBtns[`${t}_${c}`].classList.toggle('active', activeLineType === t && activeLineColor === c)
-      if (right.kind === 'tool') {
-        const { btn, img } = toolBtns[right.name]
-        const on = activeTool === right.name
+    Object.entries(lineBtns).forEach(([k, btn]) => {
+      const [t, c] = k.split(/_(?=[^_]+$)/)  // split on last underscore
+      btn.classList.toggle('active', activeLineType === t && activeLineColor === c)
+    })
+    Object.entries(toolBtns).forEach(([name, { btn, img }]) => {
+      const on = activeTool === name
+      btn.classList.toggle('active', on)
+      img.src = on ? onIcon(name) : offIcon(name)
+    })
+    Object.entries(symbolRefs).forEach(([name, refs]) => {
+      const on = activeSymbol === name
+      refs.forEach(({ btn, img, followIcon }) => {
         btn.classList.toggle('active', on)
-        img.src = on ? onIcon(right.name) : `/icons/${right.name}_OFF.png`
-      } else {
-        const { btn, img } = symbolBtns[right.name]
-        const on = activeSymbol === right.name
-        btn.classList.toggle('active', on)
-        img.src = on ? onIcon(right.name) : `/icons/${right.name}_OFF.png`
-      }
+        if (followIcon) img.src = on ? onIcon(name) : offIcon(name)
+      })
     })
   }
 
-  ROWS.forEach(({ line: [type, color], lineMode, right }) => {
-    // ── Left: line combo ────────────────────────────────────────────────────
+  // ── Build rows ────────────────────────────────────────────────────────────
+  ROWS.forEach(({ L, R }) => {
+
+    // Left button
     const lBtn = document.createElement('button')
     lBtn.className = 'tool-btn'
-    lBtn.title = `${cap(type)} ${cap(color)}`
     const lImg = document.createElement('img')
-    lImg.src = `/icons/LINE_${type}_${color}.png`
     lBtn.appendChild(lImg)
-    lBtn.addEventListener('click', () => {
-      if (activeLineType === type && activeLineColor === color) {
-        activeLineType = null; activeLineColor = null
-        lBtn.classList.remove('active')
-        drawController.setActiveLine(null, null)
-      } else {
-        clearLine()
-        activeTool = null; activeSymbol = null
-        activeLineType = type; activeLineColor = color
-        drawController.setActiveSymbol(null)
-        drawController.setTool(lineMode)
-        drawController.setActiveLine(type, color)
-        syncAll()
-      }
-    })
-    lineBtns[`${type}_${color}`] = lBtn
+
+    if (L.kind === 'line') {
+      const { type, color, lm } = L
+      lBtn.title = `${cap(type)} ${cap(color)}`
+      lImg.src = `/icons/LINE_${type}_${color}.png`
+      lBtn.addEventListener('click', () => {
+        if (activeLineType === type && activeLineColor === color) {
+          activeLineType = null; activeLineColor = null
+          lBtn.classList.remove('active')
+          drawController.setActiveLine(null, null)
+        } else {
+          clearLine()
+          activeTool = null; activeSymbol = null
+          activeLineType = type; activeLineColor = color
+          drawController.setActiveSymbol(null)
+          drawController.setTool(lm)
+          drawController.setActiveLine(type, color)
+          syncAll()
+        }
+      })
+      lineBtns[`${type}_${color}`] = lBtn
+    } else {
+      lBtn.title = L.name.replace(/_/g, ' ')
+      lImg.src = offIcon(L.name)
+      lBtn.addEventListener('click', () => armSymbol(L.name))
+      regSym(L.name, lBtn, lImg, true)
+    }
     grid.appendChild(lBtn)
 
-    // ── Right: tool or symbol ────────────────────────────────────────────────
+    // Right button
     const rBtn = document.createElement('button')
     rBtn.className = 'tool-btn'
-    rBtn.title = right.title
     const rImg = document.createElement('img')
-    rImg.src = `/icons/${right.name}_OFF.png`
     rBtn.appendChild(rImg)
 
-    if (right.kind === 'tool') {
+    if (R.kind === 'tool') {
+      rBtn.title = R.title
+      rImg.src = offIcon(R.name)
       rBtn.addEventListener('click', () => {
-        if (activeTool === right.name) {
+        if (activeTool === R.name) {
           activeTool = null
           drawController.setTool('simple_select')
           syncAll()
         } else {
           clearLine()
-          if (right.name !== 'PEN') { activeSymbol = null; drawController.setActiveSymbol(null) }
-          activeTool = right.name
-          drawController.setTool(right.mode)
+          if (R.name !== 'PEN') { activeSymbol = null; drawController.setActiveSymbol(null) }
+          activeTool = R.name
+          drawController.setTool(R.mode)
           syncAll()
         }
       })
-      toolBtns[right.name] = { btn: rBtn, img: rImg }
-    } else {
+      toolBtns[R.name] = { btn: rBtn, img: rImg }
+
+    } else if (R.kind === 'action') {
+      rBtn.title = R.title
+      rImg.src = offIcon(R.name)
       rBtn.addEventListener('click', () => {
-        if (activeSymbol === right.name) {
-          activeSymbol = null
-          drawController.setActiveSymbol(null)
-          syncAll()
-        } else {
-          clearLine()
-          if (activeTool !== 'PEN') { activeTool = null }
-          activeSymbol = right.name
-          drawController.setActiveSymbol(right.name)
-          syncAll()
-        }
+        rImg.src = onIcon(R.name)
+        rBtn.classList.add('active')
+        if (R.name === 'UNDO') drawController.undo()
+        else drawController.deleteSelected()
+        setTimeout(() => { rImg.src = offIcon(R.name); rBtn.classList.remove('active') }, 200)
       })
-      symbolBtns[right.name] = { btn: rBtn, img: rImg }
+
+    } else if (R.kind === 'symbol') {
+      rBtn.title = R.title
+      rImg.src = offIcon(R.name)
+      rBtn.addEventListener('click', () => armSymbol(R.name))
+      regSym(R.name, rBtn, rImg, true)
+
+    } else if (R.kind === 'slot') {
+      rBtn.title = `${R.name.replace(/_/g, ' ')} [${R.num}]`
+      rImg.src = offIcon(R.name)
+      rBtn.addEventListener('click', () => armSymbol(R.name))
+      const badge = document.createElement('span')
+      badge.className = 'slot-num'
+      badge.textContent = R.num
+      rBtn.appendChild(badge)
+      regSym(R.name, rBtn, rImg, false)  // slot: keep OFF icon, only outline changes
     }
+
     grid.appendChild(rBtn)
   })
 
-  // Set initial state
+  // Keyboard shortcuts 1-7
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.metaKey || e.ctrlKey) return
+    const n = parseInt(e.key)
+    if (n >= 1 && n <= SLOT_SYMBOLS.length) armSymbol(SLOT_SYMBOLS[n - 1])
+  })
+
+  // Initial state
   syncAll()
 
-  // ── Power toggle ─────────────────────────────────────────────────────────
+  // ── Power toggle ──────────────────────────────────────────────────────────
   let panelOpen = true
   function updatePowerBtn() {
     powerBtn.style.backgroundImage = panelOpen
