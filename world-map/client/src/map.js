@@ -100,7 +100,8 @@ export function initMap(containerId, initialProvider = 'openfreemap', initialSty
       center: [0, 20],
       zoom: 2,
       maxZoom: 18,
-      antialias: true
+      antialias: true,
+      preserveDrawingBuffer: true
     })
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right')

@@ -5,6 +5,7 @@ import { initCountryStyle } from '../overlays/countryStyle.js'
 import { initGridlines } from '../overlays/gridlines.js'
 import { initLabelStyle } from './labelStyle.js'
 import { initMapStyleStore, EMPTY_STYLE } from './mapStyleStore.js'
+import { exportGeotiff } from './exportGeotiff.js'
 
 // localStorage helpers
 function load(key, fallback) {
@@ -363,6 +364,7 @@ export function initControls(map, drawContext, overlays, debug) {
 
     <div id="sb-bottom">
       <button id="open-debug" title="API Diagnostics">🔍</button>
+      <button id="export-geotiff" title="Export view as GeoTIFF">⬇</button>
       <button id="open-settings" title="Settings">⚙</button>
     </div>
   `
@@ -378,6 +380,19 @@ export function initControls(map, drawContext, overlays, debug) {
   const settings = initSettings()
   document.getElementById('open-settings').onclick = () => settings.open()
   document.getElementById('open-debug').onclick    = () => debug?.open()
+
+  // ── GeoTIFF export ────────────────────────────────────────────────────────
+  const exportBtn = document.getElementById('export-geotiff')
+  exportBtn.addEventListener('click', async () => {
+    exportBtn.disabled = true
+    exportBtn.title    = 'Exporting…'
+    try {
+      await exportGeotiff(map)
+    } finally {
+      exportBtn.disabled = false
+      exportBtn.title    = 'Export view as GeoTIFF'
+    }
+  })
 
   // ── Accordion sections ─────────────────────────────────────────────────────
   document.querySelectorAll('.sb-section-header').forEach(header => {
