@@ -1,5 +1,5 @@
 #draw-toolbar {
-  position: absolute;
+  position: fixed;
   top: 8px;
   left: 268px;
   z-index: 10;
@@ -79,7 +79,32 @@
   flex-wrap: wrap;
   padding: 4px 6px 6px;
   gap: 4px;
+  /* 2 rows of 48px buttons + 1 gap + top/bottom padding */
+  max-height: 110px;
+  overflow-y: auto;
 }
+.cat-body::-webkit-scrollbar { width: 4px; }
+.cat-body::-webkit-scrollbar-track { background: transparent; }
+.cat-body::-webkit-scrollbar-thumb { background: #3a3f48; border-radius: 2px; }
+
+.drag-handle {
+  height: 14px;
+  cursor: grab;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid #2d3238;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  flex-shrink: 0;
+}
+.drag-handle::before {
+  content: '· · · · ·';
+  color: #3a3f48;
+  font-size: 9px;
+  letter-spacing: 3px;
+}
+.drag-handle:active { cursor: grabbing; }
 
 .line-section {
   padding: 6px;

@@ -70,6 +70,39 @@ export function initToolbar(drawController) {
   panel.className = 'toolbar-panel'
   root.appendChild(panel)
 
+  // ── Drag handle ───────────────────────────────────────────────────────────
+  const dragHandle = document.createElement('div')
+  dragHandle.className = 'drag-handle'
+  panel.appendChild(dragHandle)
+
+  // Restore saved position
+  const savedPos = JSON.parse(localStorage.getItem('wm_toolbar_pos') || 'null')
+  if (savedPos) {
+    root.style.left = savedPos.x + 'px'
+    root.style.top  = savedPos.y + 'px'
+  }
+
+  let _dragging = false, _offX = 0, _offY = 0
+  dragHandle.addEventListener('mousedown', e => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    _dragging = true
+    const r = root.getBoundingClientRect()
+    _offX = e.clientX - r.left
+    _offY = e.clientY - r.top
+  })
+  window.addEventListener('mousemove', e => {
+    if (!_dragging) return
+    root.style.left = (e.clientX - _offX) + 'px'
+    root.style.top  = (e.clientY - _offY) + 'px'
+  })
+  window.addEventListener('mouseup', e => {
+    if (!_dragging || e.button !== 0) return
+    _dragging = false
+    const r = root.getBoundingClientRect()
+    localStorage.setItem('wm_toolbar_pos', JSON.stringify({ x: r.left, y: r.top }))
+  })
+
   // ── Tool row (INTERACTIVE, MOVE, PEN, RULER) ──────────────────────────────
   const toolRow = document.createElement('div')
   toolRow.className = 'tool-row'
