@@ -27,59 +27,11 @@
   border: 1px solid #2d3238;
   border-radius: 6px;
   margin-top: 4px;
-  max-height: 80vh;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 .toolbar-panel.hidden { display: none; }
-
-.tool-row {
-  display: flex;
-  flex-wrap: wrap;
-  padding: 6px;
-  gap: 4px;
-  border-bottom: 1px solid #2d3238;
-}
-
-.tool-btn {
-  width: 48px;
-  height: 48px;
-  background-image: url('/icons/BasedPaneBody.png');
-  background-size: cover;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 0;
-  transition: opacity 0.15s;
-}
-.tool-btn:hover { opacity: 0.85; }
-.tool-btn.active { outline: 2px solid #4488ff; outline-offset: 1px; }
-.tool-btn img { width: 100%; height: 100%; object-fit: contain; display: block; }
-
-.section-header {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #6a7180;
-  padding: 6px 8px 2px;
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.section-header::after { content: '▾'; font-size: 10px; }
-.cat-section.collapsed .section-header::after { content: '▸'; }
-.cat-section.collapsed .cat-body { display: none; }
-
-.cat-body {
-  display: grid;
-  grid-template-columns: repeat(2, 48px);
-  gap: 4px;
-  padding: 4px 6px 6px;
-}
 
 .drag-handle {
   height: 14px;
@@ -100,24 +52,24 @@
 }
 .drag-handle:active { cursor: grabbing; }
 
-.line-section {
+.toolbar-grid {
   display: grid;
   grid-template-columns: repeat(2, 48px);
   gap: 4px;
   padding: 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
-.path-mode-indicator {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #4488ff;
-  background: rgba(68, 136, 255, 0.12);
-  border: 1px solid rgba(68, 136, 255, 0.3);
-  border-radius: 4px;
-  padding: 4px 8px;
-  margin: 4px 6px 0;
-  text-align: center;
+.tool-btn {
+  width: 48px;
+  height: 48px;
+  background-image: url('/icons/BasedPaneBody.png');
+  background-size: cover;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 0;
+  transition: opacity 0.15s;
 }
-.path-mode-indicator.hidden { display: none; }
+.tool-btn:hover { opacity: 0.85; }
+.tool-btn.active { outline: 2px solid #4488ff; outline-offset: 1px; }
+.tool-btn img { width: 100%; height: 100%; object-fit: contain; display: block; }
