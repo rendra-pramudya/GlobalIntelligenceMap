@@ -7,29 +7,13 @@ const ON_OVERRIDES = {
 
 const SYMBOL_CATEGORIES = [
   {
-    label: 'Markers',
-    symbols: ['LOCATION', 'FLAG', 'REBEL_FLAG', 'EXPLOSION', 'NUCLEAR', 'FLOOD', 'ROCKET', 'PULSE', 'CIRCLE', 'ARROW', 'RADAR']
-  },
-  {
-    label: 'Military',
-    symbols: ['SOLDIER', 'SOLDIER_STANDING', 'SOLDIER_SHOOTING', 'SOLDIER_FLAG', 'HELMET', 'REBEL_STANDING', 'REBEL_SHOOTING', 'RPG', 'WEAPON']
-  },
-  {
-    label: 'Air',
-    symbols: ['AIRPLANE', 'JETFIGHTER', 'STEALTH_BOMBER', 'DRONE', 'DRONE_BOMBER', 'KAMIKAZE_DRONE', 'HELICOPTER', 'PUBLIC_HELICOPTER', 'ANTI_MISSILE']
-  },
-  {
-    label: 'Naval',
-    symbols: ['BATTLESHIP', 'CARGOSHIP', 'CARRIER', 'SUBMARINE']
-  },
-  {
-    label: 'Ground',
-    symbols: ['TANK', 'JEEP', 'MILITARY_VEHICLE', 'MILITIA_VEHICLE', 'TRACTOR', 'AMBULANCE']
+    label: 'Symbols',
+    symbols: ['LOCATION', 'SOLDIER', 'EXPLOSION', 'NUCLEAR', 'JETFIGHTER', 'HELICOPTER', 'ROCKET', 'PULSE', 'CIRCLE', 'ARROW']
   }
 ]
 
 const LINE_TYPES = ['STROKE', 'DASHED', 'ARROW', 'FILL']
-const LINE_COLORS = ['BLUE', 'GREEN', 'RED', 'YELLOW']
+const LINE_COLORS = ['RED', 'YELLOW']
 
 function symbolOnIcon(name) {
   if (ON_OVERRIDES[name]) return ON_OVERRIDES[name]

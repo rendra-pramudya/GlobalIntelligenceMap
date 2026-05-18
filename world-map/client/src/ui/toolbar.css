@@ -22,7 +22,7 @@
 }
 
 .toolbar-panel {
-  width: 224px;
+  width: 112px;
   background: #1a1d21;
   border: 1px solid #2d3238;
   border-radius: 6px;
@@ -75,17 +75,11 @@
 .cat-section.collapsed .cat-body { display: none; }
 
 .cat-body {
-  display: flex;
-  flex-wrap: wrap;
-  padding: 4px 6px 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 48px);
   gap: 4px;
-  /* 2 rows of 48px buttons + 1 gap + top/bottom padding */
-  max-height: 110px;
-  overflow-y: auto;
+  padding: 4px 6px 6px;
 }
-.cat-body::-webkit-scrollbar { width: 4px; }
-.cat-body::-webkit-scrollbar-track { background: transparent; }
-.cat-body::-webkit-scrollbar-thumb { background: #3a3f48; border-radius: 2px; }
 
 .drag-handle {
   height: 14px;
