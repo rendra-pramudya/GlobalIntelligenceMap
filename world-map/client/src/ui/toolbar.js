@@ -12,8 +12,12 @@ const SYMBOL_CATEGORIES = [
   }
 ]
 
-const LINE_TYPES = ['STROKE', 'DASHED', 'ARROW', 'FILL']
-const LINE_COLORS = ['RED', 'YELLOW']
+const LINE_COMBOS = [
+  ['STROKE', 'RED'],    ['DASHED', 'RED'],
+  ['ARROW',  'RED'],    ['FILL',   'RED'],
+  ['STROKE', 'YELLOW'], ['DASHED', 'YELLOW'],
+  ['ARROW',  'YELLOW'], ['FILL',   'YELLOW'],
+]
 
 function symbolOnIcon(name) {
   if (ON_OVERRIDES[name]) return ON_OVERRIDES[name]
@@ -134,7 +138,7 @@ export function initToolbar(drawController) {
           drawController.setActiveSymbol(null)
           updateSymbolButtons()
         }
-        updateLineColorRow()
+        updateLineBtns()
         updatePathModeIndicator()
       }
     })
@@ -190,106 +194,54 @@ export function initToolbar(drawController) {
   actionRow.appendChild(makeActionBtn('DELETE', 'Delete selected', () => drawController.deleteSelected()))
   panel.appendChild(actionRow)
 
-  // ── Line section ──────────────────────────────────────────────────────────
+  // ── Line section (flat 2-column grid of all type×color combos) ───────────
   const lineSection = document.createElement('div')
   lineSection.className = 'line-section'
 
-  const lineTypeRow = document.createElement('div')
-  lineTypeRow.className = 'line-type-row'
-
-  const lineColorRow = document.createElement('div')
-  lineColorRow.className = 'line-color-row hidden'
-
-  const lineTypeBtnEls = {}
-  LINE_TYPES.forEach(type => {
+  const lineComboBtns = {}
+  LINE_COMBOS.forEach(([type, color]) => {
+    const key = `${type}_${color}`
     const btn = document.createElement('button')
-    btn.className = 'tool-btn line-type-btn'
-    btn.title = type.charAt(0) + type.slice(1).toLowerCase()
-    btn.style.opacity = '0.45'
+    btn.className = 'tool-btn'
+    btn.title = `${type.charAt(0) + type.slice(1).toLowerCase()} ${color.charAt(0) + color.slice(1).toLowerCase()}`
 
     const img = document.createElement('img')
-    img.src = `/icons/LINE_${type}_ON.png`
+    img.src = `/icons/LINE_${type}_${color}.png`
     btn.appendChild(img)
 
     btn.addEventListener('click', () => {
-      if (activeLineType === type) {
-        // Deactivate
+      if (activeLineType === type && activeLineColor === color) {
         activeLineType = null
         activeLineColor = null
         btn.classList.remove('active')
-        btn.style.opacity = '0.45'
-        updateLineColorRow()
         drawController.setActiveLine(null, null)
       } else {
-        // Deactivate previous
-        if (activeLineType && lineTypeBtnEls[activeLineType]) {
-          lineTypeBtnEls[activeLineType].classList.remove('active')
-          lineTypeBtnEls[activeLineType].style.opacity = '0.45'
-        }
+        const prevKey = activeLineType && activeLineColor ? `${activeLineType}_${activeLineColor}` : null
+        if (prevKey && lineComboBtns[prevKey]) lineComboBtns[prevKey].classList.remove('active')
         activeTool = null
         activeSymbol = null
         activeLineType = type
-        // Keep existing color or default to null
-        btn.classList.add('active')
-        btn.style.opacity = '1'
-        updateToolButtons()
-        updateSymbolButtons()
-        updateLineColorRow()
-        drawController.setActiveSymbol(null)
-        drawController.setTool('draw_line_string')
-        drawController.setActiveLine(type, activeLineColor)
-      }
-    })
-
-    lineTypeBtnEls[type] = btn
-    lineTypeRow.appendChild(btn)
-  })
-
-  // Color sub-row
-  const lineColorBtnEls = {}
-  LINE_COLORS.forEach(color => {
-    const btn = document.createElement('button')
-    btn.className = 'tool-btn line-color-btn'
-    btn.title = color.charAt(0) + color.slice(1).toLowerCase()
-
-    // Color icon uses current active line type
-    const img = document.createElement('img')
-    img.src = `/icons/LINE_STROKE_${color}.png` // placeholder, updated when type changes
-    btn.appendChild(img)
-
-    btn.addEventListener('click', () => {
-      if (activeLineColor === color) {
-        activeLineColor = null
-        btn.classList.remove('active')
-      } else {
-        if (activeLineColor && lineColorBtnEls[activeLineColor]) {
-          lineColorBtnEls[activeLineColor].classList.remove('active')
-        }
         activeLineColor = color
         btn.classList.add('active')
+        updateToolButtons()
+        updateSymbolButtons()
+        drawController.setActiveSymbol(null)
+        drawController.setTool('draw_line_string')
+        drawController.setActiveLine(type, color)
       }
-      drawController.setActiveLine(activeLineType, activeLineColor)
     })
 
-    lineColorBtnEls[color] = btn
-    lineColorRow.appendChild(btn)
+    lineComboBtns[key] = btn
+    lineSection.appendChild(btn)
   })
 
-  lineSection.appendChild(lineTypeRow)
-  lineSection.appendChild(lineColorRow)
   panel.appendChild(lineSection)
 
-  function updateLineColorRow() {
-    if (activeLineType) {
-      lineColorRow.classList.remove('hidden')
-      // Update color icons to match active line type
-      LINE_COLORS.forEach(color => {
-        const img = lineColorBtnEls[color].querySelector('img')
-        img.src = `/icons/LINE_${activeLineType}_${color}.png`
-      })
-    } else {
-      lineColorRow.classList.add('hidden')
-    }
+  function updateLineBtns() {
+    LINE_COMBOS.forEach(([type, color]) => {
+      const key = `${type}_${color}`
+      lineComboBtns[key].classList.toggle('active', activeLineType === type && activeLineColor === color)
+    })
   }
 
   // ── Symbol categories ─────────────────────────────────────────────────────
@@ -342,8 +294,7 @@ export function initToolbar(drawController) {
             activeLineType = null
             activeLineColor = null
             updateToolButtons()
-            updateLineTypeButtons()
-            updateLineColorRow()
+            updateLineBtns()
           }
           drawController.setActiveSymbol(name)
           updatePathModeIndicator()
@@ -369,19 +320,6 @@ export function initToolbar(drawController) {
       } else {
         btn.classList.remove('active')
         img.src = `/icons/${name}_OFF.png`
-      }
-    })
-  }
-
-  function updateLineTypeButtons() {
-    LINE_TYPES.forEach(type => {
-      const btn = lineTypeBtnEls[type]
-      if (activeLineType === type) {
-        btn.classList.add('active')
-        btn.style.opacity = '1'
-      } else {
-        btn.classList.remove('active')
-        btn.style.opacity = '0.45'
       }
     })
   }
