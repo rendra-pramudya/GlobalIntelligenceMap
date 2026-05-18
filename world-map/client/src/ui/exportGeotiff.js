@@ -147,13 +147,17 @@ export async function exportGeotiff(map, styleName = 'map') {
 
   const buf = buildGeotiff4326(w, h, rgb, west, north, east, south)
 
-  // e.g. liberty_45.2300N122.4500W_12.3400S80.1200E.tif
+  // e.g. liberty_45.2300N122.4500W_12.3400S80.1200E_alt4250m.tif
   const nwLat = fmtCoord(north, 'N', 'S')
   const nwLon = fmtCoord(west,  'E', 'W')
   const seLat = fmtCoord(south, 'N', 'S')
   const seLon = fmtCoord(east,  'E', 'W')
+  const rawAlt  = map.getCameraAltitude?.()
+  const elevStr = rawAlt != null
+    ? `_alt${Math.round(rawAlt)}m`
+    : `_z${Math.round(map.getZoom())}`
   const safeStyle = styleName.replace(/[^a-z0-9_-]/gi, '_')
-  const filename = `${safeStyle}_${nwLat}${nwLon}_${seLat}${seLon}.tif`
+  const filename = `${safeStyle}_${nwLat}${nwLon}_${seLat}${seLon}${elevStr}.tif`
 
   const blob = new Blob([buf], { type: 'image/tiff' })
   const url  = URL.createObjectURL(blob)
