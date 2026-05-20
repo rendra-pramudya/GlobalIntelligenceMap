@@ -37,7 +37,7 @@ export function initToolbar(drawController) {
   // ── Root ──────────────────────────────────────────────────────────────────
   const root = document.createElement('div')
   root.id = 'draw-toolbar'
-  document.getElementById('map').appendChild(root)
+  document.body.appendChild(root)
 
   // ── Power button ──────────────────────────────────────────────────────────
   const powerBtn = document.createElement('button')
