@@ -112,17 +112,6 @@ function fmtAlt(alt) {
 }
 function fmtSpd(v) { return v == null ? '–' : `${Math.round(v)} kt` }
 
-// Fetch key from server once and cache it
-let _keyPromise = null
-function getFR24Key() {
-  if (!_keyPromise) {
-    _keyPromise = fetch('/api/flights/fr24-key')
-      .then(r => r.json())
-      .then(({ key }) => key || '')
-      .catch(() => '')
-  }
-  return _keyPromise
-}
 
 export function initFlightradar(map) {
   const layerId   = 'flightradar-layer'
@@ -199,51 +188,22 @@ export function initFlightradar(map) {
   // ── Direct browser → FR24 API call ────────────────────────────────────────
   async function refresh() {
     try {
-      const key = await getFR24Key()
-      if (!key) { console.warn('FR24: no API key — check Settings'); return }
+      const bb     = map.getBounds()
+      const minLat = Math.max(bb.getSouth(), -90).toFixed(4)
+      const maxLat = Math.min(bb.getNorth(),  90).toFixed(4)
+      const minLon = Math.max(bb.getWest(), -180).toFixed(4)
+      const maxLon = Math.min(bb.getEast(),  180).toFixed(4)
 
-      const bb  = map.getBounds()
-      // FR24 bounds format: north,south,west,east
-      const N = Math.min(bb.getNorth(),  90).toFixed(4)
-      const S = Math.max(bb.getSouth(), -90).toFixed(4)
-      const W = Math.max(bb.getWest(), -180).toFixed(4)
-      const E = Math.min(bb.getEast(),  180).toFixed(4)
+      const res = await fetch(
+        `/api/flights?source=fr24&minLat=${minLat}&maxLat=${maxLat}&minLon=${minLon}&maxLon=${maxLon}`
+      )
+      if (!res.ok) { console.warn(`FR24: HTTP ${res.status}`); return }
 
-      const url = `https://fr24api.flightradar24.com/api/live/flight-positions/full?bounds=${N},${S},${W},${E}&limit=1500`
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${key}`, 'Accept-Version': 'v1', 'Accept': 'application/json' }
-      })
+      const geojson = await res.json()
+      if (geojson.error) { console.warn('FR24:', geojson.error); return }
 
-      if (!res.ok) {
-        console.warn(`FR24: HTTP ${res.status}`)
-        return
-      }
-
-      const { data } = await res.json()
-      const features = (data || [])
-        .filter(f => f.lat != null && f.lon != null)
-        .map(f => ({
-          type: 'Feature',
-          id:   f.fr24_id || f.hex,
-          geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
-          properties: {
-            callsign:    f.callsign || f.flight || '',
-            flight:      f.flight || '',
-            type:        f.type || '',
-            reg:         f.reg || '',
-            origin:      f.orig_iata || f.orig_icao || '',
-            destination: f.dest_iata || f.dest_icao || '',
-            altitude:    f.alt,
-            velocity:    f.gspeed,
-            heading:     f.track,
-            onGround:    f.alt === 0 && f.gspeed === 0
-          }
-        }))
-
-      console.debug(`FR24: ${features.length} flights in view`)
-      if (map.getSource(sourceId)) {
-        map.getSource(sourceId).setData({ type: 'FeatureCollection', features })
-      }
+      console.debug(`FR24: ${geojson.features?.length ?? 0} flights in view`)
+      if (map.getSource(sourceId)) map.getSource(sourceId).setData(geojson)
     } catch (e) {
       console.warn('FR24 fetch error:', e.message)
     }
