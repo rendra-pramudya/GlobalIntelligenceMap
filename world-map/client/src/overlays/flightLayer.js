@@ -107,6 +107,7 @@ export function createFlightOverlay(map, { sourceParam, layerId, sourceId, image
   let visible  = false
   let interval = null
   let popup    = null
+  let _onUpdate = null
 
   function ensureImage() {
     if (!map.hasImage(imageId)) {
@@ -187,8 +188,11 @@ export function createFlightOverlay(map, { sourceParam, layerId, sourceId, image
       if (!res.ok) { console.warn(`Flight overlay (${sourceParam}) HTTP ${res.status}`); return }
       const data = await res.json()
       if (data.error) { console.warn(`Flight overlay (${sourceParam}):`, data.error); return }
-      console.debug(`Flight overlay (${sourceParam}): ${data.features?.length ?? 0} features`)
+      const count  = data.features?.length ?? 0
+      const source = data.features?.[0]?.properties?.source || sourceParam
+      console.debug(`Flight overlay (${sourceParam}): ${count} features via ${source}`)
       if (map.getSource(sourceId)) map.getSource(sourceId).setData(data)
+      _onUpdate?.({ source, count })
     } catch (e) {
       console.warn(`Flight overlay (${sourceParam}) fetch failed:`, e.message)
     }
@@ -212,6 +216,7 @@ export function createFlightOverlay(map, { sourceParam, layerId, sourceId, image
       popup?.remove()
       popup = null
     },
-    toggle() { visible ? this.hide() : this.show() }
+    toggle() { visible ? this.hide() : this.show() },
+    onUpdate(cb) { _onUpdate = cb }
   }
 }

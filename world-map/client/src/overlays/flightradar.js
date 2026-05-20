@@ -119,9 +119,10 @@ export function initFlightradar(map) {
   const imageId   = 'plane-icon-fr24'
   const iconColor = '#44ccff'
 
-  let visible  = false
-  let interval = null
-  let popup    = null
+  let visible   = false
+  let interval  = null
+  let popup     = null
+  let _onUpdate = null
 
   // ── Icon registration ──────────────────────────────────────────────────────
   function ensureImage() {
@@ -202,8 +203,11 @@ export function initFlightradar(map) {
       const geojson = await res.json()
       if (geojson.error) { console.warn('FR24:', geojson.error); return }
 
-      console.debug(`FR24: ${geojson.features?.length ?? 0} flights in view`)
+      const count  = geojson.features?.length ?? 0
+      const source = geojson.features?.[0]?.properties?.source || 'fr24'
+      console.debug(`FR24: ${count} flights via ${source}`)
       if (map.getSource(sourceId)) map.getSource(sourceId).setData(geojson)
+      _onUpdate?.({ source, count })
     } catch (e) {
       console.warn('FR24 fetch error:', e.message)
     }
@@ -227,6 +231,7 @@ export function initFlightradar(map) {
       popup?.remove()
       popup = null
     },
-    toggle() { visible ? this.hide() : this.show() }
+    toggle() { visible ? this.hide() : this.show() },
+    onUpdate(cb) { _onUpdate = cb }
   }
 }

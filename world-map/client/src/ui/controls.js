@@ -111,8 +111,8 @@ export function initControls(map, drawContext, overlays, debug) {
           <span class="sb-chevron">›</span>
         </div>
         <div class="sb-section-body" id="sec-overlays">
-          <label class="layer-toggle"><input type="checkbox" data-layer="flights"> Flights (ADS-B / OpenSky)</label>
-          <label class="layer-toggle"><input type="checkbox" data-layer="flightradar"> Flights (FR24 / ADS-B Ex)</label>
+          <label class="layer-toggle"><input type="checkbox" data-layer="flights"> Flights (ADS-B / OpenSky)<span class="src-badge" id="src-badge-flights"></span></label>
+          <label class="layer-toggle"><input type="checkbox" data-layer="flightradar"> Flights (FR24 / ADS-B Ex)<span class="src-badge" id="src-badge-flightradar"></span></label>
           <label class="layer-toggle"><input type="checkbox" data-layer="vessels"> Marine vessels</label>
           <label class="layer-toggle"><input type="checkbox" data-layer="earthquakes"> Earthquakes</label>
           <label class="layer-toggle"><input type="checkbox" data-layer="weather"> Weather</label>
@@ -165,6 +165,15 @@ export function initControls(map, drawContext, overlays, debug) {
               <input type="color" class="ap-color" id="ap-tint-color" value="#0044ff">
               <input type="range" class="ap-slider" id="ap-tint-strength" min="0" max="60" step="1" value="0">
               <span class="ap-val" id="ap-tint-val">0</span>
+            </div>
+            <div class="ap-row ap-blend-row">
+              <span class="ap-label">Blend mode</span>
+              <select class="ap-blend-select" id="ap-tint-blend">
+                <option value="multiply">Multiply</option>
+                <option value="overlay">Overlay</option>
+                <option value="screen">Screen</option>
+                <option value="soft-light">Soft light</option>
+              </select>
             </div>
             <div class="ap-row ap-colorize-row">
               <span class="ap-label">Colorize</span>
@@ -514,6 +523,8 @@ export function initControls(map, drawContext, overlays, debug) {
     _overlays.weather?.setLayer(e.target.value)
   })
 
+  _bindSourceBadges(_overlays)
+
   // ── Place finder ───────────────────────────────────────────────────────────
   async function goToPlace() {
     const query = document.getElementById('place-input').value.trim()
@@ -599,7 +610,7 @@ export function initControls(map, drawContext, overlays, debug) {
     // Defaults
     const DEFAULTS = {
       brightness: 100, contrast: 100, saturation: 100, gamma: 100,
-      tintColor: '#0044ff', tintStrength: 0,
+      tintColor: '#0044ff', tintStrength: 0, tintBlend: 'multiply',
       colorizeOn: false, colorizeHue: 200
     }
 
@@ -611,6 +622,7 @@ export function initControls(map, drawContext, overlays, debug) {
       gamma:        +load('wm_ap_gamma',          DEFAULTS.gamma),
       tintColor:     load('wm_ap_tint_color',     DEFAULTS.tintColor),
       tintStrength: +load('wm_ap_tint_strength',  DEFAULTS.tintStrength),
+      tintBlend:     load('wm_ap_tint_blend',     DEFAULTS.tintBlend),
       colorizeOn:    load('wm_ap_colorize_on',    'false') === 'true',
       colorizeHue:  +load('wm_ap_colorize_hue',   DEFAULTS.colorizeHue)
     }
@@ -633,6 +645,7 @@ export function initControls(map, drawContext, overlays, debug) {
       map.getContainer().style.filter = parts.join(' ')
 
       // Tint overlay
+      tintEl.style.mixBlendMode = ap.tintBlend
       const strength = ap.tintStrength / 100
       if (strength <= 0) {
         tintEl.style.opacity = '0'
@@ -673,6 +686,14 @@ export function initControls(map, drawContext, overlays, debug) {
       applyFilter()
     })
 
+    const blendSelect = document.getElementById('ap-tint-blend')
+    blendSelect.value = ap.tintBlend
+    blendSelect.addEventListener('change', () => {
+      ap.tintBlend = blendSelect.value
+      save('wm_ap_tint_blend', ap.tintBlend)
+      applyFilter()
+    })
+
     // Colorize toggle + hue slider
     const colorizeChk = document.getElementById('ap-colorize-on')
     const colorizeHueSlider = document.getElementById('ap-colorize-hue')
@@ -707,6 +728,7 @@ export function initControls(map, drawContext, overlays, debug) {
         save(`wm_ap_${k}`, ap[k])
       })
       save('wm_ap_tint_color', ap.tintColor)
+      save('wm_ap_tint_blend', ap.tintBlend)
       save('wm_ap_colorize_on', ap.colorizeOn)
       document.getElementById('ap-brightness').value    = ap.brightness
       document.getElementById('ap-contrast').value      = ap.contrast
@@ -714,6 +736,7 @@ export function initControls(map, drawContext, overlays, debug) {
       document.getElementById('ap-gamma').value         = ap.gamma
       document.getElementById('ap-tint-strength').value = ap.tintStrength
       document.getElementById('ap-tint-color').value    = ap.tintColor
+      document.getElementById('ap-tint-blend').value    = ap.tintBlend
       document.getElementById('ap-brightness-val').textContent = ap.brightness
       document.getElementById('ap-contrast-val').textContent   = ap.contrast
       document.getElementById('ap-saturation-val').textContent = ap.saturation
@@ -740,6 +763,7 @@ export function initControls(map, drawContext, overlays, debug) {
       document.getElementById('ap-tint-strength').value         = ap.tintStrength
       document.getElementById('ap-tint-val').textContent        = ap.tintStrength
       document.getElementById('ap-tint-color').value            = ap.tintColor
+      document.getElementById('ap-tint-blend').value            = ap.tintBlend || 'multiply'
       syncColorizeUI()
       applyFilter()
     }
@@ -1304,6 +1328,23 @@ export function initControls(map, drawContext, overlays, debug) {
     savedStyle:      activeStyle,
     savedProjection,
     onBaseMapChange(cb) { _onBaseMapChange = cb },
-    updateOverlays(newOverlays) { _overlays = newOverlays }
+    updateOverlays(newOverlays) {
+      _overlays = newOverlays
+      _bindSourceBadges(newOverlays)
+    }
+  }
+}
+
+function _bindSourceBadges(overlays) {
+  const badges = {
+    flights:      document.getElementById('src-badge-flights'),
+    flightradar:  document.getElementById('src-badge-flightradar')
+  }
+  for (const [key, el] of Object.entries(badges)) {
+    if (!el) continue
+    overlays[key]?.onUpdate?.(({ source, count }) => {
+      el.textContent = `${source} · ${count.toLocaleString()}`
+      el.style.display = ''
+    })
   }
 }
