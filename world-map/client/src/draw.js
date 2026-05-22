@@ -166,11 +166,9 @@ export function initDraw(map) {
 
   function setFreehandPreviewStyle() {
     const color = getColor(activeLineColor)
-    const width = activeLineType === 'FILL' ? 6
-                : (activeLineType === 'RING' || activeLineType === 'CIRCLE_FILL') ? 4
-                : 2
-    const fillOpacity = activeLineType === 'RING'        ? 0
-                      : activeLineType === 'CIRCLE_FILL' ? 0.5
+    const width       = activeLineType === 'STROKE' || activeLineType === 'FILL' ? 4 : 2
+    const fillOpacity = activeLineType === 'STROKE' ? 0
+                      : activeLineType === 'FILL'   ? 0.5
                       : 0.15
     if (map.getLayer('freehand-preview')) {
       map.setPaintProperty('freehand-preview', 'line-color', color)
@@ -514,11 +512,11 @@ function lineWidthExpression() {
 }
 
 function polygonStrokeExpression() {
-  return ['match', ['get', 'user_lineType'], 'RING', 4, 'CIRCLE_FILL', 4, 2]
+  return ['match', ['get', 'user_lineType'], 'STROKE', 4, 'FILL', 4, 2]
 }
 
 function polygonFillOpacityExpression(defaultOpacity) {
-  return ['match', ['get', 'user_lineType'], 'RING', 0, 'CIRCLE_FILL', 0.5, defaultOpacity]
+  return ['match', ['get', 'user_lineType'], 'STROKE', 0, 'FILL', 0.5, defaultOpacity]
 }
 
 function drawStyles() {

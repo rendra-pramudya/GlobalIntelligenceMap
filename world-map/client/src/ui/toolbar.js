@@ -1,12 +1,12 @@
 import './toolbar.css'
 
 const ROWS = [
-  { L: { kind: 'line',   type: 'STROKE', color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
-  { L: { kind: 'line',   type: 'FILL',   color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
+  { L: { kind: 'line',   type: 'STROKE', color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
+  { L: { kind: 'line',   type: 'FILL',   color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
   { L: { kind: 'line',   type: 'DASHED', color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'PEN',         mode: 'freehand_line',    title: 'Draw line' } },
   { L: { kind: 'line',   type: 'ARROW',  color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
-  { L: { kind: 'line',   type: 'STROKE', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'action', name: 'UNDO',   title: 'Undo' } },
-  { L: { kind: 'line',   type: 'FILL',   color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'action', name: 'DELETE', title: 'Delete selected' } },
+  { L: { kind: 'line',   type: 'STROKE', color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'action', name: 'UNDO',   title: 'Undo' } },
+  { L: { kind: 'line',   type: 'FILL',   color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'action', name: 'DELETE', title: 'Delete selected' } },
   { L: { kind: 'line',   type: 'DASHED', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'symbol', name: 'RADAR', title: 'Radar' } },
   { L: { kind: 'line',   type: 'ARROW',  color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'symbol', name: 'DRONE', title: 'Drone' } },
   { L: { kind: 'symbol', name: 'SOLDIER'    }, R: { kind: 'loc', num: 1 } },
@@ -14,8 +14,8 @@ const ROWS = [
   { L: { kind: 'symbol', name: 'ROCKET'     }, R: { kind: 'loc', num: 3 } },
   { L: { kind: 'symbol', name: 'TANK'       }, R: { kind: 'loc', num: 4 } },
   { L: { kind: 'symbol', name: 'HELICOPTER' }, R: { kind: 'loc', num: 5 } },
-  { L: { kind: 'shape', name: 'PULSE',  lineType: 'RING',        title: 'Area outline' }, R: { kind: 'loc', num: 6 } },
-  { L: { kind: 'shape', name: 'CIRCLE', lineType: 'CIRCLE_FILL', title: 'Filled area'  }, R: { kind: 'loc', num: 7 } },
+  { L: { kind: 'symbol', name: 'PULSE'      }, R: { kind: 'loc', num: 6 } },
+  { L: { kind: 'symbol', name: 'CIRCLE'     }, R: { kind: 'loc', num: 7 } },
 ]
 
 function cap(s) { return s.charAt(0) + s.slice(1).toLowerCase() }
@@ -134,7 +134,6 @@ export function initToolbar(drawController, map) {
   const lineBtns   = {}  // `${type}_${color}` → btn
   const toolBtns   = {}  // name → { btn, img }
   const symbolRefs = {}  // name → [{ btn, img, followIcon }]
-  const shapeBtns  = {}  // lineType → { btn, img, name }
 
   function regSym(name, btn, img, followIcon) {
     ;(symbolRefs[name] = symbolRefs[name] || []).push({ btn, img, followIcon })
@@ -144,8 +143,6 @@ export function initToolbar(drawController, map) {
     if (!activeLineType) return
     const k = `${activeLineType}_${activeLineColor}`
     lineBtns[k]?.classList.remove('active')
-    const sr = shapeBtns[activeLineType]
-    if (sr) { sr.btn.classList.remove('active'); sr.img.src = offIcon(sr.name) }
     activeLineType = null; activeLineColor = null
   }
 
@@ -166,11 +163,6 @@ export function initToolbar(drawController, map) {
     Object.entries(lineBtns).forEach(([k, btn]) => {
       const [t, c] = k.split(/_(?=[^_]+$)/)
       btn.classList.toggle('active', activeLineType === t && activeLineColor === c)
-    })
-    Object.entries(shapeBtns).forEach(([lt, { btn, img, name }]) => {
-      const on = activeLineType === lt
-      btn.classList.toggle('active', on)
-      img.src = on ? onIcon(name) : offIcon(name)
     })
     Object.entries(toolBtns).forEach(([name, { btn, img }]) => {
       const on = activeTool === name
@@ -204,6 +196,7 @@ export function initToolbar(drawController, map) {
           activeLineType = null; activeLineColor = null
           lBtn.classList.remove('active')
           drawController.setActiveLine(null, null)
+          drawController.setTool('simple_select')
         } else {
           clearLine()
           activeTool = null; activeSymbol = null
@@ -215,25 +208,6 @@ export function initToolbar(drawController, map) {
         }
       })
       lineBtns[`${type}_${color}`] = lBtn
-    } else if (L.kind === 'shape') {
-      lBtn.title = L.title
-      lImg.src = offIcon(L.name)
-      lBtn.addEventListener('click', () => {
-        if (activeLineType === L.lineType) {
-          clearLine()
-          drawController.setActiveLine(null, null)
-          drawController.setTool('simple_select')
-        } else {
-          clearLine()
-          activeTool = null; activeSymbol = null
-          drawController.setActiveSymbol(null)
-          activeLineType = L.lineType; activeLineColor = null
-          drawController.setActiveLine(L.lineType, null)
-          drawController.setTool('freehand_polygon')
-          syncAll()
-        }
-      })
-      shapeBtns[L.lineType] = { btn: lBtn, img: lImg, name: L.name }
     } else {
       lBtn.title = L.name.replace(/_/g, ' ')
       lImg.src = offIcon(L.name)
