@@ -218,7 +218,7 @@ export function initToolbar(drawController) {
 
     } else if (R.kind === 'slot') {
       rBtn.title = `${R.name.replace(/_/g, ' ')} [${R.num}]`
-      rImg.src = offIcon(R.name)
+      rImg.src = '/icons/OFF.png'
       rBtn.addEventListener('click', () => armSymbol(R.name))
       const badge = document.createElement('span')
       badge.className = 'slot-num'
