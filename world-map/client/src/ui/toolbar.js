@@ -46,7 +46,20 @@ export function initToolbar(drawController, map) {
     if (!raw) return
     const loc = JSON.parse(raw)
     locs[idx] = loc
-    map.flyTo({ center: [loc.lng, loc.lat], zoom: loc.zoom, pitch: loc.pitch, bearing: loc.bearing, duration: 800 })
+    map.flyTo({
+      center:   [loc.lng, loc.lat],
+      zoom:     loc.zoom,
+      pitch:    loc.pitch    ?? 0,
+      bearing:  loc.bearing  ?? 0,
+      duration: 1200,
+      essential: true
+    })
+    // Brief highlight so the user sees the button was triggered
+    const ref = locBtns[idx]
+    if (ref) {
+      ref.btn.classList.add('loc-flash')
+      setTimeout(() => ref.btn.classList.remove('loc-flash'), 500)
+    }
   }
 
   function syncLocBtn(idx) {

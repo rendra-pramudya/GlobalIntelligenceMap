@@ -1104,7 +1104,14 @@ export function initControls(map, drawContext, overlays, debug) {
     function recallLoc(idx) {
       const loc = locs[idx]
       if (!loc) return
-      map.flyTo({ center: [loc.lng, loc.lat], zoom: loc.zoom, pitch: loc.pitch, bearing: loc.bearing, duration: 800 })
+      map.flyTo({
+        center:   [loc.lng, loc.lat],
+        zoom:     loc.zoom,
+        pitch:    loc.pitch    ?? 0,
+        bearing:  loc.bearing  ?? 0,
+        duration: 1200,
+        essential: true
+      })
     }
 
     function fmtCoord(v, pos, neg) {
