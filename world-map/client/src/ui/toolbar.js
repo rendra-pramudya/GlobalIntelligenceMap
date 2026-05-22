@@ -41,32 +41,28 @@ export function initToolbar(drawController, map) {
   // DOM refs for each loc button: [{ btn, badge }]
   const locBtns = []
 
-  function saveLocSlot(idx) {
-    const c = map.getCenter()
-    locs[idx] = {
-      lat:     c.lat,
-      lng:     c.lng,
-      zoom:    map.getZoom(),
-      pitch:   map.getPitch(),
-      bearing: map.getBearing(),
-      altitude: typeof map.getCameraAltitude === 'function' ? map.getCameraAltitude() : null
-    }
-    localStorage.setItem(`wm_loc_${idx + 1}`, JSON.stringify(locs[idx]))
-    syncLocBtn(idx)
-  }
-
   function recallLocSlot(idx) {
-    const loc = locs[idx]
-    if (!loc) return
+    const raw = localStorage.getItem(`wm_loc_${idx + 1}`)
+    if (!raw) return
+    const loc = JSON.parse(raw)
+    locs[idx] = loc
     map.flyTo({ center: [loc.lng, loc.lat], zoom: loc.zoom, pitch: loc.pitch, bearing: loc.bearing, duration: 800 })
   }
 
   function syncLocBtn(idx) {
-    const { btn, badge } = locBtns[idx]
+    const ref = locBtns[idx]
+    if (!ref) return
+    const { btn, badge } = ref
+    // Refresh from localStorage in case sidebar saved it
+    const raw = localStorage.getItem(`wm_loc_${idx + 1}`)
+    locs[idx] = raw ? JSON.parse(raw) : null
     const saved = locs[idx] != null
     btn.classList.toggle('loc-saved', saved)
     badge.classList.toggle('loc-badge-saved', saved)
   }
+
+  // Sync when sidebar saves or clears a slot
+  window.addEventListener('wm-loc-updated', e => syncLocBtn(e.detail.idx))
 
   // ── Root ──────────────────────────────────────────────────────────────────
   const root = document.createElement('div')
@@ -250,7 +246,7 @@ export function initToolbar(drawController, map) {
     } else if (R.kind === 'loc') {
       const idx = R.num - 1
       rBtn.className = 'tool-btn loc-btn'
-      rBtn.title = `Location ${R.num} — click to recall, hold to save`
+      rBtn.title = `Location ${R.num} — click to recall (save from left panel)`
       rImg.src = '/icons/OFF.png'
 
       const badge = document.createElement('span')
@@ -260,32 +256,7 @@ export function initToolbar(drawController, map) {
 
       locBtns[idx] = { btn: rBtn, badge }
 
-      // Short click: recall if saved, save if empty
-      // Long press (600ms): save / overwrite
-      let holdTimer = null
-      let didHold   = false
-
-      rBtn.addEventListener('mousedown', e => {
-        if (e.button !== 0) return
-        didHold   = false
-        holdTimer = setTimeout(() => {
-          didHold = true
-          saveLocSlot(idx)
-          rBtn.classList.add('loc-flash')
-          setTimeout(() => rBtn.classList.remove('loc-flash'), 400)
-        }, 600)
-      })
-      rBtn.addEventListener('mouseup', () => clearTimeout(holdTimer))
-      rBtn.addEventListener('mouseleave', () => clearTimeout(holdTimer))
-      rBtn.addEventListener('click', () => {
-        if (didHold) return  // handled by hold
-        if (locs[idx]) recallLocSlot(idx)
-        else {
-          saveLocSlot(idx)
-          rBtn.classList.add('loc-flash')
-          setTimeout(() => rBtn.classList.remove('loc-flash'), 400)
-        }
-      })
+      rBtn.addEventListener('click', () => recallLocSlot(idx))
     }
 
     grid.appendChild(rBtn)
