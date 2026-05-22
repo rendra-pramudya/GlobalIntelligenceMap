@@ -87,6 +87,7 @@ const FreehandGuardMode = {
 export function initDraw(map) {
   const draw = new MaplibreDraw({
     displayControlsDefault: false,
+    userProperties: true,   // exposes feature.properties as user_* in style filters
     modes: { ...MaplibreDraw.modes, freehand_guard: FreehandGuardMode },
     styles: drawStyles()
   })
