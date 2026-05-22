@@ -12,6 +12,58 @@ function getColor(colorName) {
   return COLOR_MAP[colorName] || DEFAULT_COLOR
 }
 
+// ── Arrowhead icon (filled triangle pointing north) ───────────────────────────
+function makeArrowImage(hex, size = 32) {
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const cx = size / 2, s = size / 32
+  ctx.clearRect(0, 0, size, size)
+  ctx.fillStyle = hex
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)'
+  ctx.lineWidth = 1.5 * s
+  ctx.beginPath()
+  ctx.moveTo(cx,          2  * s)   // tip (north)
+  ctx.lineTo(cx + 9 * s, 22 * s)   // right base
+  ctx.lineTo(cx - 9 * s, 22 * s)   // left base
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+  return ctx.getImageData(0, 0, size, size)
+}
+
+function registerArrowImages(map) {
+  Object.entries({ ...COLOR_MAP, DEFAULT: DEFAULT_COLOR }).forEach(([name, hex]) => {
+    const id = `wm_arrow_${name}`
+    if (!map.hasImage(id)) {
+      const img = makeArrowImage(hex)
+      map.addImage(id, { width: img.width, height: img.height, data: img.data })
+    }
+  })
+}
+
+// Stable bearing from the end of a freehand path
+function getEndBearing(coords, map) {
+  const tip = coords[coords.length - 1]
+  const tipPx = map.project(tip)
+  for (let i = coords.length - 2; i >= 0; i--) {
+    const ptPx = map.project(coords[i])
+    if (Math.hypot(tipPx.x - ptPx.x, tipPx.y - ptPx.y) >= 20) {
+      return bearingDeg(coords[i], tip)
+    }
+  }
+  return bearingDeg(coords[0], tip)
+}
+
+function bearingDeg(from, to) {
+  const toRad = d => d * Math.PI / 180
+  const dLng  = toRad(to[0] - from[0])
+  const y = Math.sin(dLng) * Math.cos(toRad(to[1]))
+  const x = Math.cos(toRad(from[1])) * Math.sin(toRad(to[1]))
+           - Math.sin(toRad(from[1])) * Math.cos(toRad(to[1])) * Math.cos(dLng)
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360
+}
+
 // No-op draw mode used while freehand is active — prevents MapLibre Draw
 // from reacting to mouse events during a freehand stroke.
 const FreehandGuardMode = {
@@ -61,13 +113,20 @@ export function initDraw(map) {
       'icon-image': ['get', 'symbolName'],
       'icon-size': 0.5,
       'icon-allow-overlap': true,
-      'icon-anchor': 'center'
+      'icon-anchor': 'center',
+      'icon-rotate': ['coalesce', ['get', 'bearing'], 0],
+      'icon-rotation-alignment': 'map'
     }
   })
 
-  // Lazy-load symbol images
+  // Register arrow images now and after every style reload
+  registerArrowImages(map)
+  map.on('style.load', () => registerArrowImages(map))
+
+  // Lazy-load symbol images (non-arrow)
   map.on('styleimagemissing', (e) => {
     const name = e.id
+    if (name.startsWith('wm_arrow_')) { registerArrowImages(map); return }
     const img = new Image()
     img.onload = () => { if (!map.hasImage(name)) map.addImage(name, img) }
     img.src = `/icons/${name}_OFF.png`
@@ -175,6 +234,23 @@ export function initDraw(map) {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: endCoord },
         properties: { id: symId, symbolName: activeSymbol, pathId: id }
+      }
+      pathSymbols.set(id, symId)
+      localSymbols.set(symId, symFeature)
+      updateSymbolSource()
+      socket.send(JSON.stringify({ type: 'symbol_create', feature: symFeature }))
+    }
+
+    // Arrow tip symbol
+    if (activeLineType === 'ARROW' && geometry.type === 'LineString') {
+      const endCoord = raw[raw.length - 1]
+      const bearing  = getEndBearing(raw, map)
+      const colorKey = (activeLineColor in COLOR_MAP) ? activeLineColor : 'DEFAULT'
+      const symId = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const symFeature = {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: endCoord },
+        properties: { id: symId, symbolName: `wm_arrow_${colorKey}`, bearing, pathId: id }
       }
       pathSymbols.set(id, symId)
       localSymbols.set(symId, symFeature)
