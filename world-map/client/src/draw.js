@@ -107,11 +107,17 @@ export function initDraw(map) {
 
   function setFreehandPreviewStyle() {
     const color = getColor(activeLineColor)
-    const width = activeLineType === 'FILL' ? 6 : 2
+    const width = activeLineType === 'FILL' ? 6
+                : (activeLineType === 'RING' || activeLineType === 'CIRCLE_FILL') ? 4
+                : 2
+    const fillOpacity = activeLineType === 'RING'        ? 0
+                      : activeLineType === 'CIRCLE_FILL' ? 0.5
+                      : 0.15
     if (map.getLayer('freehand-preview')) {
       map.setPaintProperty('freehand-preview', 'line-color', color)
       map.setPaintProperty('freehand-preview', 'line-width', width)
       map.setPaintProperty('freehand-preview-fill', 'fill-color', color)
+      map.setPaintProperty('freehand-preview-fill', 'fill-opacity', fillOpacity)
     }
   }
 
@@ -431,17 +437,25 @@ function lineWidthExpression() {
   return ['match', ['get', 'user_lineType'], 'FILL', 6, 2]
 }
 
+function polygonStrokeExpression() {
+  return ['match', ['get', 'user_lineType'], 'RING', 4, 'CIRCLE_FILL', 4, 2]
+}
+
+function polygonFillOpacityExpression(defaultOpacity) {
+  return ['match', ['get', 'user_lineType'], 'RING', 0, 'CIRCLE_FILL', 0.5, defaultOpacity]
+}
+
 function drawStyles() {
   const color = colorExpression()
 
   return [
     { id: 'gl-draw-polygon-fill',   type: 'fill',
       filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      paint:  { 'fill-color': color, 'fill-opacity': 0.2 } },
+      paint:  { 'fill-color': color, 'fill-opacity': polygonFillOpacityExpression(0.2) } },
 
     { id: 'gl-draw-polygon-stroke', type: 'line',
       filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      paint:  { 'line-color': color, 'line-width': 2 } },
+      paint:  { 'line-color': color, 'line-width': polygonStrokeExpression() } },
 
     { id: 'gl-draw-line-solid',     type: 'line',
       filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static'], ['!in', 'user_lineType', 'DASHED']],
@@ -465,7 +479,7 @@ function drawStyles() {
 
     { id: 'gl-draw-polygon-fill-active', type: 'fill',
       filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
-      paint:  { 'fill-color': color, 'fill-opacity': 0.3 } },
+      paint:  { 'fill-color': color, 'fill-opacity': polygonFillOpacityExpression(0.3) } },
 
     { id: 'gl-draw-polygon-fill-static',   type: 'fill',
       filter: ['all', ['==', '$type', 'Polygon'],    ['==', 'mode', 'static']],
