@@ -392,6 +392,23 @@ export function initControls(map, drawContext, overlays, debug) {
   `
   document.body.appendChild(panel)
 
+  // ── Sidebar toggle button ──────────────────────────────────────────────────
+  const sidebarToggle = document.createElement('button')
+  sidebarToggle.id = 'sidebar-toggle'
+  sidebarToggle.textContent = '<<'
+  sidebarToggle.title = 'Hide panel'
+  document.body.appendChild(sidebarToggle)
+
+  let sidebarOpen = true
+  sidebarToggle.addEventListener('click', () => {
+    sidebarOpen = !sidebarOpen
+    panel.classList.toggle('sidebar-hidden', !sidebarOpen)
+    document.getElementById('map').classList.toggle('sidebar-hidden', !sidebarOpen)
+    sidebarToggle.textContent = sidebarOpen ? '<<' : '>>'
+    sidebarToggle.title = sidebarOpen ? 'Hide panel' : 'Show panel'
+    sidebarToggle.classList.toggle('sidebar-closed', !sidebarOpen)
+  })
+
   // ── Restore initial UI states from localStorage ────────────────────────────
   document.getElementById(savedProjection === 'globe' ? 'btn-globe' : 'btn-mercator')
     .classList.add('active')
