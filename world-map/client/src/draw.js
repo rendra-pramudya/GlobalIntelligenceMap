@@ -213,14 +213,15 @@ export function initDraw(map) {
       geometry = { type: 'LineString', coordinates: raw }
     }
 
-    // Add to draw store
-    const [id] = draw.add({ type: 'Feature', geometry, properties: {} })
-    draw.setFeatureProperty(id, 'lineType', activeLineType)
-    draw.setFeatureProperty(id, 'lineColor', activeLineColor || 'DEFAULT')
-    if (activeSymbol && geometry.type === 'LineString') {
-      draw.setFeatureProperty(id, 'unitSymbol', activeSymbol)
+    // Add to draw store — properties must go into draw.add() so style
+    // expressions see them on the very first render frame.
+    const props = {
+      lineType:  activeLineType,
+      lineColor: activeLineColor || 'DEFAULT',
     }
+    if (activeSymbol && geometry.type === 'LineString') props.unitSymbol = activeSymbol
 
+    const [id] = draw.add({ type: 'Feature', geometry, properties: props })
     const saved = draw.get(id)
     socket.send(JSON.stringify({ type: 'drawing_create', feature: saved }))
 
@@ -497,64 +498,57 @@ export function initDraw(map) {
 }
 
 function colorExpression() {
-  return [
-    'match', ['get', 'user_lineColor'],
-    'BLUE',   '#4488ff',
-    'GREEN',  '#44cc44',
-    'RED',    '#ff4444',
-    'YELLOW', '#ffcc00',
-    '#ff6b35'
-  ]
-}
-
-function lineWidthExpression() {
-  return ['match', ['get', 'user_lineType'], 'FILL', 6, 2]
-}
-
-function polygonStrokeExpression() {
-  return ['match', ['get', 'user_lineType'], 'STROKE', 4, 'FILL', 4, 2]
-}
-
-function polygonFillOpacityExpression(defaultOpacity) {
-  return ['match', ['get', 'user_lineType'], 'STROKE', 0, 'FILL', 0.5, defaultOpacity]
+  return ['match', ['get', 'user_lineColor'],
+    'BLUE',   '#4488ff', 'GREEN',  '#44cc44',
+    'RED',    '#ff4444', 'YELLOW', '#ffcc00',
+    '#ff6b35']
 }
 
 function drawStyles() {
   const color = colorExpression()
 
   return [
-    { id: 'gl-draw-polygon-fill',   type: 'fill',
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      paint:  { 'fill-color': color, 'fill-opacity': polygonFillOpacityExpression(0.2) } },
+    // ── Polygon fills (explicit per-type to avoid match-expression issues) ──
+    { id: 'gl-draw-poly-fill-stroke-only', type: 'fill',
+      filter: ['all', ['==', '$type', 'Polygon'], ['==', 'user_lineType', 'STROKE']],
+      paint:  { 'fill-color': color, 'fill-opacity': 0 } },
 
-    { id: 'gl-draw-polygon-stroke', type: 'line',
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-      paint:  { 'line-color': color, 'line-width': polygonStrokeExpression() } },
+    { id: 'gl-draw-poly-fill-solid', type: 'fill',
+      filter: ['all', ['==', '$type', 'Polygon'], ['==', 'user_lineType', 'FILL']],
+      paint:  { 'fill-color': color, 'fill-opacity': 0.5 } },
 
-    { id: 'gl-draw-line-solid',     type: 'line',
-      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static'], ['!in', 'user_lineType', 'DASHED']],
-      paint:  { 'line-color': color, 'line-width': lineWidthExpression() } },
+    { id: 'gl-draw-poly-fill-default', type: 'fill',
+      filter: ['all', ['==', '$type', 'Polygon'], ['!in', 'user_lineType', 'STROKE', 'FILL']],
+      paint:  { 'fill-color': color, 'fill-opacity': 0.2 } },
 
-    { id: 'gl-draw-line-dashed',    type: 'line',
-      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static'], ['==', 'user_lineType', 'DASHED']],
+    // ── Polygon strokes ──────────────────────────────────────────────────────
+    { id: 'gl-draw-poly-stroke-4px', type: 'line',
+      filter: ['all', ['==', '$type', 'Polygon'], ['in', 'user_lineType', 'STROKE', 'FILL']],
+      paint:  { 'line-color': color, 'line-width': 4 } },
+
+    { id: 'gl-draw-poly-stroke-2px', type: 'line',
+      filter: ['all', ['==', '$type', 'Polygon'], ['!in', 'user_lineType', 'STROKE', 'FILL']],
+      paint:  { 'line-color': color, 'line-width': 2 } },
+
+    // ── Lines ────────────────────────────────────────────────────────────────
+    { id: 'gl-draw-line-solid',  type: 'line',
+      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'user_lineType', 'DASHED']],
+      paint:  { 'line-color': color, 'line-width': 2 } },
+
+    { id: 'gl-draw-line-dashed', type: 'line',
+      filter: ['all', ['==', '$type', 'LineString'], ['==', 'user_lineType', 'DASHED']],
       paint:  { 'line-color': color, 'line-width': 2, 'line-dasharray': [4, 3] } },
 
-    { id: 'gl-draw-vertex',         type: 'circle',
-      filter: ['all', ['==', 'meta', 'vertex'],    ['==', '$type', 'Point']],
+    // ── Vertices & midpoints ─────────────────────────────────────────────────
+    { id: 'gl-draw-vertex',   type: 'circle',
+      filter: ['all', ['==', 'meta', 'vertex'],   ['==', '$type', 'Point']],
       paint:  { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-width': 2, 'circle-stroke-color': color } },
 
-    { id: 'gl-draw-midpoint',       type: 'circle',
-      filter: ['all', ['==', 'meta', 'midpoint'],  ['==', '$type', 'Point']],
+    { id: 'gl-draw-midpoint', type: 'circle',
+      filter: ['all', ['==', 'meta', 'midpoint'], ['==', '$type', 'Point']],
       paint:  { 'circle-radius': 3, 'circle-color': '#fff', 'circle-stroke-width': 1, 'circle-stroke-color': '#888' } },
 
-    { id: 'gl-draw-line-active',    type: 'line',
-      filter: ['all', ['==', '$type', 'LineString'], ['==', 'active', 'true']],
-      paint:  { 'line-color': color, 'line-width': lineWidthExpression(), 'line-opacity': 0.9 } },
-
-    { id: 'gl-draw-polygon-fill-active', type: 'fill',
-      filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
-      paint:  { 'fill-color': color, 'fill-opacity': polygonFillOpacityExpression(0.3) } },
-
+    // ── Static (read-only) ───────────────────────────────────────────────────
     { id: 'gl-draw-polygon-fill-static',   type: 'fill',
       filter: ['all', ['==', '$type', 'Polygon'],    ['==', 'mode', 'static']],
       paint:  { 'fill-color': '#888', 'fill-opacity': 0.1 } },
