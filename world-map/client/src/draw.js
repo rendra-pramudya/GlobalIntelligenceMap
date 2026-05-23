@@ -108,6 +108,18 @@ export function initDraw(map) {
 
   const mapEl = map.getContainer()
 
+  // ── Symbol-path gesture state ─────────────────────────────────────────────
+  // When a symbol is armed and the user drags instead of clicking, we draw a
+  // vehicle path and animate the icon along it (ported from reference project).
+  let symPathTracking  = false   // tracking a potential sym-path gesture
+  let symPathThreshMet = false   // have we crossed the movement threshold?
+  let symPathCoords    = []      // coords collected during gesture
+  let _suppressNextClick = false // set after a committed path to block map click
+
+  // ── Animation state ───────────────────────────────────────────────────────
+  const animJobs = new Map()  // symId → { coords, startTime, duration, done }
+  let   animRafId = null
+
   // ── Symbol layer ──────────────────────────────────────────────────────────
   map.addSource('draw-symbols-source', {
     type: 'geojson',
@@ -271,6 +283,99 @@ export function initDraw(map) {
     }
   }
 
+  // ── Vehicle-path animation ────────────────────────────────────────────────
+
+  function interpolateAlongPath(coords, t) {
+    if (coords.length < 2) return { lng: coords[0][0], lat: coords[0][1], bearing: 0 }
+    let total = 0
+    const segs = []
+    for (let i = 1; i < coords.length; i++) {
+      const dx = coords[i][0] - coords[i-1][0]
+      const dy = coords[i][1] - coords[i-1][1]
+      total += Math.sqrt(dx*dx + dy*dy)
+      segs.push(total)
+    }
+    if (total === 0) return { lng: coords[0][0], lat: coords[0][1], bearing: 0 }
+    const target = t * total
+    for (let i = 0; i < segs.length; i++) {
+      const prev = i > 0 ? segs[i-1] : 0
+      if (target <= segs[i]) {
+        const segLen = segs[i] - prev
+        const f = segLen > 0 ? (target - prev) / segLen : 0
+        const a = coords[i], b = coords[i+1]
+        return {
+          lng:     a[0] + (b[0] - a[0]) * f,
+          lat:     a[1] + (b[1] - a[1]) * f,
+          bearing: bearingDeg(a, b)
+        }
+      }
+    }
+    const last = coords[coords.length - 1]
+    return { lng: last[0], lat: last[1], bearing: bearingDeg(coords[coords.length-2], last) }
+  }
+
+  function animTick(ts) {
+    let anyActive = false
+    animJobs.forEach((job, symId) => {
+      if (job.done) return
+      const t   = Math.min((ts - job.startTime) / job.duration, 1)
+      const pos = interpolateAlongPath(job.coords, t)
+      const feat = localSymbols.get(symId)
+      if (feat) {
+        localSymbols.set(symId, {
+          ...feat,
+          geometry:   { type: 'Point', coordinates: [pos.lng, pos.lat] },
+          properties: { ...feat.properties, bearing: pos.bearing }
+        })
+      }
+      if (t < 1) { anyActive = true } else { job.done = true; animJobs.delete(symId) }
+    })
+    updateSymbolSource()
+    animRafId = anyActive ? requestAnimationFrame(animTick) : null
+  }
+
+  function startSymbolAnimation(symId, coords, duration = 6000) {
+    animJobs.set(symId, { coords, startTime: performance.now(), duration, done: false })
+    if (!animRafId) animRafId = requestAnimationFrame(animTick)
+  }
+
+  function placeSymbolAt(symbolName, coord) {
+    const id = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const feature = {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: coord },
+      properties: { id, symbolName }
+    }
+    localSymbols.set(id, feature)
+    updateSymbolSource()
+    socket.send(JSON.stringify({ type: 'symbol_create', feature }))
+  }
+
+  function commitSymbolPath(coords, symbolName) {
+    // Draw a faint dashed path line
+    const [pathId] = draw.add({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: coords },
+      properties: { lineType: 'PATH', lineColor: 'DEFAULT', unitSymbol: symbolName }
+    })
+    socket.send(JSON.stringify({ type: 'drawing_create', feature: draw.get(pathId) }))
+
+    // Place symbol at path start with initial bearing
+    const symId       = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const initBearing = coords.length >= 2 ? bearingDeg(coords[0], coords[1]) : 0
+    const symFeature  = {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: coords[0] },
+      properties: { id: symId, symbolName, bearing: initBearing, pathId }
+    }
+    pathSymbols.set(pathId, symId)
+    localSymbols.set(symId, symFeature)
+    updateSymbolSource()
+    socket.send(JSON.stringify({ type: 'symbol_create', feature: symFeature }))
+
+    startSymbolAnimation(symId, coords)
+  }
+
   // ── Freehand events — Pointer Events API ─────────────────────────────────
   // Unified mouse / touch / pen handling (ported from reference HTML project).
   // Using raw DOM Pointer Events lets us: (a) track a single pointer ID so
@@ -284,33 +389,95 @@ export function initDraw(map) {
   }
 
   mapEl.addEventListener('pointerdown', (e) => {
-    if (!freehandMode) return
     if (!e.isPrimary) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
-    e.preventDefault()
-    e.stopPropagation()
-    _activePtrId     = e.pointerId
-    _strokeLineType  = activeLineType
-    _strokeLineColor = activeLineColor
-    freehandDrawing  = true
+
     const ll = lngLatFromPtr(e)
-    freehandCoords   = [[ll.lng, ll.lat]]
-    map.dragPan.disable()
+
+    // ── Case 1: active freehand line/polygon tool ──────────────────────────
+    if (freehandMode) {
+      e.preventDefault()
+      e.stopPropagation()
+      _activePtrId     = e.pointerId
+      _strokeLineType  = activeLineType
+      _strokeLineColor = activeLineColor
+      freehandDrawing  = true
+      freehandCoords   = [[ll.lng, ll.lat]]
+      map.dragPan.disable()
+      return
+    }
+
+    // ── Case 2: symbol armed → track for potential vehicle-path gesture ─────
+    if (activeSymbol) {
+      e.preventDefault()
+      _activePtrId     = e.pointerId
+      symPathTracking  = true
+      symPathThreshMet = false
+      symPathCoords    = [[ll.lng, ll.lat]]
+      map.dragPan.disable()
+    }
   }, { passive: false })
 
   mapEl.addEventListener('pointermove', (e) => {
-    if (!freehandDrawing || e.pointerId !== _activePtrId) return
-    e.preventDefault()
-    e.stopPropagation()
+    if (e.pointerId !== _activePtrId) return
+
     const ll = lngLatFromPtr(e)
-    freehandCoords.push([ll.lng, ll.lat])
-    updateFreehandPreview()
+
+    // ── Case 1: freehand drawing ───────────────────────────────────────────
+    if (freehandDrawing) {
+      e.preventDefault()
+      e.stopPropagation()
+      freehandCoords.push([ll.lng, ll.lat])
+      updateFreehandPreview()
+      return
+    }
+
+    // ── Case 2: symbol path tracking ──────────────────────────────────────
+    if (symPathTracking) {
+      e.preventDefault()
+      symPathCoords.push([ll.lng, ll.lat])
+      if (!symPathThreshMet) {
+        const fp = map.project(symPathCoords[0])
+        const cp = map.project([ll.lng, ll.lat])
+        if (Math.hypot(fp.x - cp.x, fp.y - cp.y) > 12) symPathThreshMet = true
+      }
+      if (symPathThreshMet && symPathCoords.length >= 2) {
+        map.getSource('freehand-src')?.setData({ type: 'FeatureCollection', features: [{
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: symPathCoords },
+          properties: {}
+        }]})
+      }
+    }
   }, { passive: false })
 
   function onPointerEnd(e) {
-    if (!freehandDrawing) return
     if (e.pointerId !== _activePtrId) return
-    freehandCommit()
+
+    // ── Case 1: freehand drawing commit ───────────────────────────────────
+    if (freehandDrawing) {
+      freehandCommit()
+      return
+    }
+
+    // ── Case 2: symbol path commit or click ───────────────────────────────
+    if (symPathTracking) {
+      symPathTracking = false
+      _activePtrId    = null
+      map.dragPan.enable()
+      clearFreehandPreview()
+
+      if (symPathThreshMet && symPathCoords.length >= 2 && activeSymbol) {
+        _suppressNextClick = true
+        commitSymbolPath([...symPathCoords], activeSymbol)
+      } else if (activeSymbol && symPathCoords.length > 0) {
+        // Short tap → static placement
+        _suppressNextClick = true
+        placeSymbolAt(activeSymbol, symPathCoords[0])
+      }
+      symPathCoords    = []
+      symPathThreshMet = false
+    }
   }
   mapEl.addEventListener('pointerup',     onPointerEnd, { passive: false })
   mapEl.addEventListener('pointercancel', onPointerEnd, { passive: false })
@@ -380,21 +547,14 @@ export function initDraw(map) {
   })
 
   // ── Symbol placement on map click ─────────────────────────────────────────
+  // Pointer events handle tap/drag directly; this catches any MapLibre-routed
+  // clicks that slipped through (e.g. keyboard-accessible interactions).
   map.on('click', (e) => {
     if (!activeSymbol) return
-    // Block click-to-place while in any drawing mode (freehand or built-in)
+    if (_suppressNextClick) { _suppressNextClick = false; return }
     const m = draw.getMode()
     if (m !== 'simple_select' && m !== 'direct_select') return
-
-    const id = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const feature = {
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
-      properties: { id, symbolName: activeSymbol }
-    }
-    localSymbols.set(id, feature)
-    updateSymbolSource()
-    socket.send(JSON.stringify({ type: 'symbol_create', feature }))
+    placeSymbolAt(activeSymbol, [e.lngLat.lng, e.lngLat.lat])
   })
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -425,7 +585,10 @@ export function initDraw(map) {
 
   function setActiveSymbol(name) {
     activeSymbol = name
-    // Don't change draw mode — allows PEN + symbol for unit-path drawing
+    if (!freehandMode) {
+      mapEl.style.cursor      = name ? 'crosshair' : ''
+      mapEl.style.touchAction = name ? 'none'       : ''
+    }
   }
 
   function setActiveLine(type, color) {
@@ -557,12 +720,17 @@ function drawStyles() {
 
     // ── Lines ────────────────────────────────────────────────────────────────
     { id: 'gl-draw-line-solid',  type: 'line',
-      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'user_lineType', 'DASHED']],
+      filter: ['all', ['==', '$type', 'LineString'], ['!in', 'user_lineType', 'DASHED', 'PATH']],
       paint:  { 'line-color': color, 'line-width': 2 } },
 
     { id: 'gl-draw-line-dashed', type: 'line',
       filter: ['all', ['==', '$type', 'LineString'], ['==', 'user_lineType', 'DASHED']],
       paint:  { 'line-color': color, 'line-width': 2, 'line-dasharray': [4, 3] } },
+
+    // Vehicle path trail — thin dashed, low opacity
+    { id: 'gl-draw-line-path', type: 'line',
+      filter: ['all', ['==', '$type', 'LineString'], ['==', 'user_lineType', 'PATH']],
+      paint:  { 'line-color': color, 'line-width': 1, 'line-dasharray': [3, 4], 'line-opacity': 0.4 } },
 
     // ── Vertices & midpoints ─────────────────────────────────────────────────
     { id: 'gl-draw-vertex',   type: 'circle',
