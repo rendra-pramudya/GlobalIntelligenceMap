@@ -95,10 +95,18 @@ export function initDraw(map) {
   map.addControl(draw, 'top-left')
 
   // State
-  let activeSymbol   = null
-  let activeLineType = 'STROKE'
+  let activeSymbol    = null
+  let activeLineType  = 'STROKE'
   let activeLineColor = null
-  const pathSymbols = new Map() // lineId -> symId for unit-path endpoint icons
+  const pathSymbols   = new Map() // lineId -> symId for unit-path endpoint icons
+
+  // Stroke-locked values — captured at pointerdown so mid-gesture tool changes
+  // don't corrupt the in-progress stroke (pattern from the reference HTML project)
+  let _strokeLineType  = null
+  let _strokeLineColor = null
+  let _activePtrId     = null
+
+  const mapEl = map.getContainer()
 
   // ── Symbol layer ──────────────────────────────────────────────────────────
   map.addSource('draw-symbols-source', {
@@ -198,8 +206,16 @@ export function initDraw(map) {
 
   function freehandCommit() {
     freehandDrawing = false
+    _activePtrId    = null
     map.dragPan.enable()
     clearFreehandPreview()
+
+    // Use values locked at stroke start (not the current active values, which may
+    // have changed mid-gesture — same approach as the reference HTML project)
+    const lineType  = _strokeLineType  ?? activeLineType
+    const lineColor = _strokeLineColor ?? activeLineColor
+    _strokeLineType  = null
+    _strokeLineColor = null
 
     const minPts = freehandMode === 'polygon' ? 3 : 2
     if (freehandCoords.length < minPts) { freehandCoords = []; return }
@@ -214,12 +230,8 @@ export function initDraw(map) {
       geometry = { type: 'LineString', coordinates: raw }
     }
 
-    // Add to draw store — properties must go into draw.add() so style
-    // expressions see them on the very first render frame.
-    const props = {
-      lineType:  activeLineType,
-      lineColor: activeLineColor || 'DEFAULT',
-    }
+    // Properties must go into draw.add() so style filters see them on the first frame
+    const props = { lineType, lineColor: lineColor || 'DEFAULT' }
     if (activeSymbol && geometry.type === 'LineString') props.unitSymbol = activeSymbol
 
     const [id] = draw.add({ type: 'Feature', geometry, properties: props })
@@ -242,10 +254,10 @@ export function initDraw(map) {
     }
 
     // Arrow tip symbol
-    if (activeLineType === 'ARROW' && geometry.type === 'LineString') {
+    if (lineType === 'ARROW' && geometry.type === 'LineString') {
       const endCoord = raw[raw.length - 1]
       const bearing  = getEndBearing(raw, map)
-      const colorKey = (activeLineColor in COLOR_MAP) ? activeLineColor : 'DEFAULT'
+      const colorKey = (lineColor in COLOR_MAP) ? lineColor : 'DEFAULT'
       const symId = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const symFeature = {
         type: 'Feature',
@@ -259,44 +271,49 @@ export function initDraw(map) {
     }
   }
 
-  // Mouse events
-  map.on('mousedown', (e) => {
+  // ── Freehand events — Pointer Events API ─────────────────────────────────
+  // Unified mouse / touch / pen handling (ported from reference HTML project).
+  // Using raw DOM Pointer Events lets us: (a) track a single pointer ID so
+  // secondary fingers don't corrupt the stroke; (b) set touchAction:'none' to
+  // prevent OS-level scroll/zoom from stealing the gesture; (c) lock the line
+  // type/color at stroke-start so mid-gesture tool changes are harmless.
+
+  function lngLatFromPtr(e) {
+    const r = mapEl.getBoundingClientRect()
+    return map.unproject([e.clientX - r.left, e.clientY - r.top])
+  }
+
+  mapEl.addEventListener('pointerdown', (e) => {
     if (!freehandMode) return
-    freehandDrawing = true
-    freehandCoords  = [[e.lngLat.lng, e.lngLat.lat]]
+    if (!e.isPrimary) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    _activePtrId     = e.pointerId
+    _strokeLineType  = activeLineType
+    _strokeLineColor = activeLineColor
+    freehandDrawing  = true
+    const ll = lngLatFromPtr(e)
+    freehandCoords   = [[ll.lng, ll.lat]]
     map.dragPan.disable()
-  })
+  }, { passive: false })
 
-  map.on('mousemove', (e) => {
+  mapEl.addEventListener('pointermove', (e) => {
+    if (!freehandDrawing || e.pointerId !== _activePtrId) return
+    e.preventDefault()
+    e.stopPropagation()
+    const ll = lngLatFromPtr(e)
+    freehandCoords.push([ll.lng, ll.lat])
+    updateFreehandPreview()
+  }, { passive: false })
+
+  function onPointerEnd(e) {
     if (!freehandDrawing) return
-    // Skip point if < 4px from last — keeps coord count reasonable
-    const last = freehandCoords[freehandCoords.length - 1]
-    const lp = map.project(last)
-    const np = map.project([e.lngLat.lng, e.lngLat.lat])
-    if ((np.x - lp.x) ** 2 + (np.y - lp.y) ** 2 < 16) return
-    freehandCoords.push([e.lngLat.lng, e.lngLat.lat])
-    updateFreehandPreview()
-  })
-
-  map.on('mouseup', () => { if (freehandDrawing) freehandCommit() })
-
-  // Touch events
-  map.on('touchstart', (e) => {
-    if (!freehandMode || e.originalEvent.touches.length !== 1) return
-    e.originalEvent.preventDefault()
-    freehandDrawing = true
-    freehandCoords  = [[e.lngLat.lng, e.lngLat.lat]]
-    map.dragPan.disable()
-  })
-
-  map.on('touchmove', (e) => {
-    if (!freehandDrawing || e.originalEvent.touches.length !== 1) return
-    e.originalEvent.preventDefault()
-    freehandCoords.push([e.lngLat.lng, e.lngLat.lat])
-    updateFreehandPreview()
-  })
-
-  map.on('touchend', () => { if (freehandDrawing) freehandCommit() })
+    if (e.pointerId !== _activePtrId) return
+    freehandCommit()
+  }
+  mapEl.addEventListener('pointerup',     onPointerEnd, { passive: false })
+  mapEl.addEventListener('pointercancel', onPointerEnd, { passive: false })
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   const socket = new WebSocket(`ws://${location.host}/ws`)
@@ -384,7 +401,10 @@ export function initDraw(map) {
   function setTool(mode) {
     // Cancel any in-progress freehand stroke
     if (freehandDrawing) {
-      freehandDrawing = false
+      freehandDrawing  = false
+      _activePtrId     = null
+      _strokeLineType  = null
+      _strokeLineColor = null
       map.dragPan.enable()
       clearFreehandPreview()
       freehandCoords = []
@@ -393,9 +413,13 @@ export function initDraw(map) {
     if (mode === 'freehand_line' || mode === 'freehand_polygon') {
       freehandMode = mode === 'freehand_line' ? 'line' : 'polygon'
       draw.changeMode('freehand_guard')
+      mapEl.style.cursor      = 'crosshair'
+      mapEl.style.touchAction = 'none'     // prevent OS scroll/zoom stealing the gesture
     } else {
       freehandMode = null
       draw.changeMode(mode)
+      mapEl.style.cursor      = ''
+      mapEl.style.touchAction = ''
     }
   }
 
