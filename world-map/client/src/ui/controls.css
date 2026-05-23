@@ -24,6 +24,44 @@
   top: 0 !important;
   width: calc(100% - 260px) !important;
   height: 100% !important;
+  transition: left 0.25s ease, width 0.25s ease;
+}
+#map.sidebar-hidden {
+  left: 0 !important;
+  width: 100% !important;
+}
+
+#sidebar {
+  transition: transform 0.25s ease;
+}
+#sidebar.sidebar-hidden {
+  transform: translateX(-260px);
+}
+
+/* ── Sidebar toggle button ────────────────────────────────────────────────── */
+
+#sidebar-toggle {
+  position: fixed;
+  bottom: 12px;
+  left: 8px;
+  z-index: 20;
+  background: #1a1d21;
+  border: 1px solid #2d3238;
+  border-radius: 4px;
+  color: #6a7180;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  padding: 4px 7px;
+  cursor: pointer;
+  transition: left 0.25s ease, color 0.15s, border-color 0.15s;
+}
+#sidebar-toggle:hover {
+  color: #c8ccd2;
+  border-color: #4a4f58;
+}
+#sidebar-toggle.sidebar-closed {
+  left: 8px;
 }
 
 /* ── Top area: logo + search ───────────────────────────────────────────────── */
@@ -477,6 +515,57 @@
   width: 100%;
 }
 .ap-blend-select:focus { outline: none; border-color: #2d7dd2; }
+
+/* ── Location slots (sidebar) ────────────────────────────────────────────────── */
+
+.loc-slot-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto auto auto;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border-bottom: 1px solid #1e2126;
+}
+.loc-slot-row:last-child { border-bottom: none; }
+
+.loc-slot-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: #44ccff;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.loc-slot-info {
+  font-size: 9px;
+  color: #a0a6b0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: monospace;
+}
+
+.loc-slot-empty {
+  color: #3a3f48;
+  font-style: italic;
+  font-family: inherit;
+}
+
+.loc-slot-btn {
+  background: none;
+  border: 1px solid #2d3238;
+  border-radius: 3px;
+  color: #6a7180;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 1px 4px;
+  line-height: 1.4;
+  flex-shrink: 0;
+  transition: color 0.12s, border-color 0.12s;
+}
+.loc-slot-btn:hover:not(:disabled) { color: #c8ccd2; border-color: #4a4f58; }
+.loc-slot-btn:disabled { opacity: 0.3; cursor: default; }
+.loc-slot-del:hover:not(:disabled) { color: #e05555; border-color: #e05555; }
 
 /* ── Source badge ────────────────────────────────────────────────────────────── */
 

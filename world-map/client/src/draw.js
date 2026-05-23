@@ -12,6 +12,58 @@ function getColor(colorName) {
   return COLOR_MAP[colorName] || DEFAULT_COLOR
 }
 
+// ── Arrowhead icon (filled triangle pointing north) ───────────────────────────
+function makeArrowImage(hex, size = 32) {
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const cx = size / 2, s = size / 32
+  ctx.clearRect(0, 0, size, size)
+  ctx.fillStyle = hex
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)'
+  ctx.lineWidth = 1.5 * s
+  ctx.beginPath()
+  ctx.moveTo(cx,          2  * s)   // tip (north)
+  ctx.lineTo(cx + 9 * s, 22 * s)   // right base
+  ctx.lineTo(cx - 9 * s, 22 * s)   // left base
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+  return ctx.getImageData(0, 0, size, size)
+}
+
+function registerArrowImages(map) {
+  Object.entries({ ...COLOR_MAP, DEFAULT: DEFAULT_COLOR }).forEach(([name, hex]) => {
+    const id = `wm_arrow_${name}`
+    if (!map.hasImage(id)) {
+      const img = makeArrowImage(hex)
+      map.addImage(id, { width: img.width, height: img.height, data: img.data })
+    }
+  })
+}
+
+// Stable bearing from the end of a freehand path
+function getEndBearing(coords, map) {
+  const tip = coords[coords.length - 1]
+  const tipPx = map.project(tip)
+  for (let i = coords.length - 2; i >= 0; i--) {
+    const ptPx = map.project(coords[i])
+    if (Math.hypot(tipPx.x - ptPx.x, tipPx.y - ptPx.y) >= 20) {
+      return bearingDeg(coords[i], tip)
+    }
+  }
+  return bearingDeg(coords[0], tip)
+}
+
+function bearingDeg(from, to) {
+  const toRad = d => d * Math.PI / 180
+  const dLng  = toRad(to[0] - from[0])
+  const y = Math.sin(dLng) * Math.cos(toRad(to[1]))
+  const x = Math.cos(toRad(from[1])) * Math.sin(toRad(to[1]))
+           - Math.sin(toRad(from[1])) * Math.cos(toRad(to[1])) * Math.cos(dLng)
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360
+}
+
 // No-op draw mode used while freehand is active — prevents MapLibre Draw
 // from reacting to mouse events during a freehand stroke.
 const FreehandGuardMode = {
@@ -35,6 +87,7 @@ const FreehandGuardMode = {
 export function initDraw(map) {
   const draw = new MaplibreDraw({
     displayControlsDefault: false,
+    userProperties: true,   // exposes feature.properties as user_* in style filters
     modes: { ...MaplibreDraw.modes, freehand_guard: FreehandGuardMode },
     styles: drawStyles()
   })
@@ -61,13 +114,20 @@ export function initDraw(map) {
       'icon-image': ['get', 'symbolName'],
       'icon-size': 0.5,
       'icon-allow-overlap': true,
-      'icon-anchor': 'center'
+      'icon-anchor': 'center',
+      'icon-rotate': ['coalesce', ['get', 'bearing'], 0],
+      'icon-rotation-alignment': 'map'
     }
   })
 
-  // Lazy-load symbol images
+  // Register arrow images now and after every style reload
+  registerArrowImages(map)
+  map.on('style.load', () => registerArrowImages(map))
+
+  // Lazy-load symbol images (non-arrow)
   map.on('styleimagemissing', (e) => {
     const name = e.id
+    if (name.startsWith('wm_arrow_')) { registerArrowImages(map); return }
     const img = new Image()
     img.onload = () => { if (!map.hasImage(name)) map.addImage(name, img) }
     img.src = `/icons/${name}_OFF.png`
@@ -107,11 +167,15 @@ export function initDraw(map) {
 
   function setFreehandPreviewStyle() {
     const color = getColor(activeLineColor)
-    const width = activeLineType === 'FILL' ? 6 : 2
+    const width       = activeLineType === 'STROKE' || activeLineType === 'FILL' ? 4 : 2
+    const fillOpacity = activeLineType === 'STROKE' ? 0
+                      : activeLineType === 'FILL'   ? 0.5
+                      : 0.15
     if (map.getLayer('freehand-preview')) {
       map.setPaintProperty('freehand-preview', 'line-color', color)
       map.setPaintProperty('freehand-preview', 'line-width', width)
       map.setPaintProperty('freehand-preview-fill', 'fill-color', color)
+      map.setPaintProperty('freehand-preview-fill', 'fill-opacity', fillOpacity)
     }
   }
 
@@ -150,14 +214,15 @@ export function initDraw(map) {
       geometry = { type: 'LineString', coordinates: raw }
     }
 
-    // Add to draw store
-    const [id] = draw.add({ type: 'Feature', geometry, properties: {} })
-    draw.setFeatureProperty(id, 'lineType', activeLineType)
-    draw.setFeatureProperty(id, 'lineColor', activeLineColor || 'DEFAULT')
-    if (activeSymbol && geometry.type === 'LineString') {
-      draw.setFeatureProperty(id, 'unitSymbol', activeSymbol)
+    // Add to draw store — properties must go into draw.add() so style
+    // expressions see them on the very first render frame.
+    const props = {
+      lineType:  activeLineType,
+      lineColor: activeLineColor || 'DEFAULT',
     }
+    if (activeSymbol && geometry.type === 'LineString') props.unitSymbol = activeSymbol
 
+    const [id] = draw.add({ type: 'Feature', geometry, properties: props })
     const saved = draw.get(id)
     socket.send(JSON.stringify({ type: 'drawing_create', feature: saved }))
 
@@ -169,6 +234,23 @@ export function initDraw(map) {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: endCoord },
         properties: { id: symId, symbolName: activeSymbol, pathId: id }
+      }
+      pathSymbols.set(id, symId)
+      localSymbols.set(symId, symFeature)
+      updateSymbolSource()
+      socket.send(JSON.stringify({ type: 'symbol_create', feature: symFeature }))
+    }
+
+    // Arrow tip symbol
+    if (activeLineType === 'ARROW' && geometry.type === 'LineString') {
+      const endCoord = raw[raw.length - 1]
+      const bearing  = getEndBearing(raw, map)
+      const colorKey = (activeLineColor in COLOR_MAP) ? activeLineColor : 'DEFAULT'
+      const symId = `sym-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const symFeature = {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: endCoord },
+        properties: { id: symId, symbolName: `wm_arrow_${colorKey}`, bearing, pathId: id }
       }
       pathSymbols.set(id, symId)
       localSymbols.set(symId, symFeature)
@@ -417,56 +499,57 @@ export function initDraw(map) {
 }
 
 function colorExpression() {
-  return [
-    'match', ['get', 'user_lineColor'],
-    'BLUE',   '#4488ff',
-    'GREEN',  '#44cc44',
-    'RED',    '#ff4444',
-    'YELLOW', '#ffcc00',
-    '#ff6b35'
-  ]
-}
-
-function lineWidthExpression() {
-  return ['match', ['get', 'user_lineType'], 'FILL', 6, 2]
+  return ['match', ['get', 'user_lineColor'],
+    'BLUE',   '#4488ff', 'GREEN',  '#44cc44',
+    'RED',    '#ff4444', 'YELLOW', '#ffcc00',
+    '#ff6b35']
 }
 
 function drawStyles() {
   const color = colorExpression()
 
   return [
-    { id: 'gl-draw-polygon-fill',   type: 'fill',
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
+    // ── Polygon fills (explicit per-type to avoid match-expression issues) ──
+    { id: 'gl-draw-poly-fill-stroke-only', type: 'fill',
+      filter: ['all', ['==', '$type', 'Polygon'], ['==', 'user_lineType', 'STROKE']],
+      paint:  { 'fill-color': color, 'fill-opacity': 0 } },
+
+    { id: 'gl-draw-poly-fill-solid', type: 'fill',
+      filter: ['all', ['==', '$type', 'Polygon'], ['==', 'user_lineType', 'FILL']],
+      paint:  { 'fill-color': color, 'fill-opacity': 0.5 } },
+
+    { id: 'gl-draw-poly-fill-default', type: 'fill',
+      filter: ['all', ['==', '$type', 'Polygon'], ['!in', 'user_lineType', 'STROKE', 'FILL']],
       paint:  { 'fill-color': color, 'fill-opacity': 0.2 } },
 
-    { id: 'gl-draw-polygon-stroke', type: 'line',
-      filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
+    // ── Polygon strokes ──────────────────────────────────────────────────────
+    { id: 'gl-draw-poly-stroke-4px', type: 'line',
+      filter: ['all', ['==', '$type', 'Polygon'], ['in', 'user_lineType', 'STROKE', 'FILL']],
+      paint:  { 'line-color': color, 'line-width': 4 } },
+
+    { id: 'gl-draw-poly-stroke-2px', type: 'line',
+      filter: ['all', ['==', '$type', 'Polygon'], ['!in', 'user_lineType', 'STROKE', 'FILL']],
       paint:  { 'line-color': color, 'line-width': 2 } },
 
-    { id: 'gl-draw-line-solid',     type: 'line',
-      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static'], ['!in', 'user_lineType', 'DASHED']],
-      paint:  { 'line-color': color, 'line-width': lineWidthExpression() } },
+    // ── Lines ────────────────────────────────────────────────────────────────
+    { id: 'gl-draw-line-solid',  type: 'line',
+      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'user_lineType', 'DASHED']],
+      paint:  { 'line-color': color, 'line-width': 2 } },
 
-    { id: 'gl-draw-line-dashed',    type: 'line',
-      filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static'], ['==', 'user_lineType', 'DASHED']],
+    { id: 'gl-draw-line-dashed', type: 'line',
+      filter: ['all', ['==', '$type', 'LineString'], ['==', 'user_lineType', 'DASHED']],
       paint:  { 'line-color': color, 'line-width': 2, 'line-dasharray': [4, 3] } },
 
-    { id: 'gl-draw-vertex',         type: 'circle',
-      filter: ['all', ['==', 'meta', 'vertex'],    ['==', '$type', 'Point']],
+    // ── Vertices & midpoints ─────────────────────────────────────────────────
+    { id: 'gl-draw-vertex',   type: 'circle',
+      filter: ['all', ['==', 'meta', 'vertex'],   ['==', '$type', 'Point']],
       paint:  { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-width': 2, 'circle-stroke-color': color } },
 
-    { id: 'gl-draw-midpoint',       type: 'circle',
-      filter: ['all', ['==', 'meta', 'midpoint'],  ['==', '$type', 'Point']],
+    { id: 'gl-draw-midpoint', type: 'circle',
+      filter: ['all', ['==', 'meta', 'midpoint'], ['==', '$type', 'Point']],
       paint:  { 'circle-radius': 3, 'circle-color': '#fff', 'circle-stroke-width': 1, 'circle-stroke-color': '#888' } },
 
-    { id: 'gl-draw-line-active',    type: 'line',
-      filter: ['all', ['==', '$type', 'LineString'], ['==', 'active', 'true']],
-      paint:  { 'line-color': color, 'line-width': lineWidthExpression(), 'line-opacity': 0.9 } },
-
-    { id: 'gl-draw-polygon-fill-active', type: 'fill',
-      filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
-      paint:  { 'fill-color': color, 'fill-opacity': 0.3 } },
-
+    // ── Static (read-only) ───────────────────────────────────────────────────
     { id: 'gl-draw-polygon-fill-static',   type: 'fill',
       filter: ['all', ['==', '$type', 'Polygon'],    ['==', 'mode', 'static']],
       paint:  { 'fill-color': '#888', 'fill-opacity': 0.1 } },

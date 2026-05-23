@@ -1,25 +1,22 @@
 import './toolbar.css'
 
 const ROWS = [
-  { L: { kind: 'line',   type: 'STROKE', color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
-  { L: { kind: 'line',   type: 'FILL',   color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
+  { L: { kind: 'line',   type: 'STROKE', color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
+  { L: { kind: 'line',   type: 'FILL',   color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
   { L: { kind: 'line',   type: 'DASHED', color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'PEN',         mode: 'freehand_line',    title: 'Draw line' } },
-  { L: { kind: 'line',   type: 'ARROW',  color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
-  { L: { kind: 'line',   type: 'STROKE', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'action', name: 'UNDO',   title: 'Undo' } },
-  { L: { kind: 'line',   type: 'FILL',   color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'action', name: 'DELETE', title: 'Delete selected' } },
+  { L: { kind: 'line',   type: 'ARROW',  color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
+  { L: { kind: 'line',   type: 'STROKE', color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'action', name: 'UNDO',   title: 'Undo' } },
+  { L: { kind: 'line',   type: 'FILL',   color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'action', name: 'DELETE', title: 'Delete selected' } },
   { L: { kind: 'line',   type: 'DASHED', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'symbol', name: 'RADAR', title: 'Radar' } },
-  { L: { kind: 'line',   type: 'ARROW',  color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'symbol', name: 'DRONE', title: 'Drone' } },
-  { L: { kind: 'symbol', name: 'SOLDIER'    }, R: { kind: 'slot', name: 'SOLDIER',    num: 1 } },
-  { L: { kind: 'symbol', name: 'JETFIGHTER' }, R: { kind: 'slot', name: 'JETFIGHTER', num: 2 } },
-  { L: { kind: 'symbol', name: 'ROCKET'     }, R: { kind: 'slot', name: 'ROCKET',     num: 3 } },
-  { L: { kind: 'symbol', name: 'TANK'       }, R: { kind: 'slot', name: 'TANK',       num: 4 } },
-  { L: { kind: 'symbol', name: 'HELICOPTER' }, R: { kind: 'slot', name: 'HELICOPTER', num: 5 } },
-  { L: { kind: 'symbol', name: 'PULSE'      }, R: { kind: 'slot', name: 'PULSE',      num: 6 } },
-  { L: { kind: 'symbol', name: 'CIRCLE'     }, R: { kind: 'slot', name: 'CIRCLE',     num: 7 } },
+  { L: { kind: 'line',   type: 'ARROW',  color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'symbol', name: 'DRONE', title: 'Drone' } },
+  { L: { kind: 'symbol', name: 'SOLDIER'    }, R: { kind: 'loc', num: 1 } },
+  { L: { kind: 'symbol', name: 'JETFIGHTER' }, R: { kind: 'loc', num: 2 } },
+  { L: { kind: 'symbol', name: 'ROCKET'     }, R: { kind: 'loc', num: 3 } },
+  { L: { kind: 'symbol', name: 'TANK'       }, R: { kind: 'loc', num: 4 } },
+  { L: { kind: 'symbol', name: 'HELICOPTER' }, R: { kind: 'loc', num: 5 } },
+  { L: { kind: 'symbol', name: 'PULSE'      }, R: { kind: 'loc', num: 6 } },
+  { L: { kind: 'symbol', name: 'CIRCLE'     }, R: { kind: 'loc', num: 7 } },
 ]
-
-// Keyboard shortcuts 1-7 map to these symbols in order
-const SLOT_SYMBOLS = ['SOLDIER', 'JETFIGHTER', 'ROCKET', 'TANK', 'HELICOPTER', 'PULSE', 'CIRCLE']
 
 function cap(s) { return s.charAt(0) + s.slice(1).toLowerCase() }
 function offIcon(name) { return `/icons/${name}_OFF.png` }
@@ -28,11 +25,57 @@ function onIcon(name) {
   return ov[name] ?? `/icons/${name}_ON.png`
 }
 
-export function initToolbar(drawController) {
+export function initToolbar(drawController, map) {
   let activeTool      = 'INTERACTIVE'
   let activeSymbol    = null
   let activeLineType  = null
   let activeLineColor = null
+
+  // ── Location memory ────────────────────────────────────────────────────────
+  // 7 slots, persisted to localStorage.  null = empty.
+  const LOC_COUNT = 7
+  const locs = Array.from({ length: LOC_COUNT }, (_, i) => {
+    const raw = localStorage.getItem(`wm_loc_${i + 1}`)
+    return raw ? JSON.parse(raw) : null
+  })
+  // DOM refs for each loc button: [{ btn, badge }]
+  const locBtns = []
+
+  function recallLocSlot(idx) {
+    const raw = localStorage.getItem(`wm_loc_${idx + 1}`)
+    if (!raw) return
+    const loc = JSON.parse(raw)
+    locs[idx] = loc
+    map.flyTo({
+      center:   [loc.lng, loc.lat],
+      zoom:     loc.zoom,
+      pitch:    loc.pitch    ?? 0,
+      bearing:  loc.bearing  ?? 0,
+      duration: 1200,
+      essential: true
+    })
+    // Brief highlight so the user sees the button was triggered
+    const ref = locBtns[idx]
+    if (ref) {
+      ref.btn.classList.add('loc-flash')
+      setTimeout(() => ref.btn.classList.remove('loc-flash'), 500)
+    }
+  }
+
+  function syncLocBtn(idx) {
+    const ref = locBtns[idx]
+    if (!ref) return
+    const { btn, badge } = ref
+    // Refresh from localStorage in case sidebar saved it
+    const raw = localStorage.getItem(`wm_loc_${idx + 1}`)
+    locs[idx] = raw ? JSON.parse(raw) : null
+    const saved = locs[idx] != null
+    btn.classList.toggle('loc-saved', saved)
+    badge.classList.toggle('loc-badge-saved', saved)
+  }
+
+  // Sync when sidebar saves or clears a slot
+  window.addEventListener('wm-loc-updated', e => syncLocBtn(e.detail.idx))
 
   // ── Root ──────────────────────────────────────────────────────────────────
   const root = document.createElement('div')
@@ -90,10 +133,7 @@ export function initToolbar(drawController) {
   // Registries
   const lineBtns   = {}  // `${type}_${color}` → btn
   const toolBtns   = {}  // name → { btn, img }
-  // symbolRefs: name → [{ btn, img, followIcon }]
-  // followIcon=true: icon switches ON/OFF with state (left symbol btns)
-  // followIcon=false: icon stays OFF, only outline changes (slot btns)
-  const symbolRefs  = {}
+  const symbolRefs = {}  // name → [{ btn, img, followIcon }]
 
   function regSym(name, btn, img, followIcon) {
     ;(symbolRefs[name] = symbolRefs[name] || []).push({ btn, img, followIcon })
@@ -121,7 +161,7 @@ export function initToolbar(drawController) {
 
   function syncAll() {
     Object.entries(lineBtns).forEach(([k, btn]) => {
-      const [t, c] = k.split(/_(?=[^_]+$)/)  // split on last underscore
+      const [t, c] = k.split(/_(?=[^_]+$)/)
       btn.classList.toggle('active', activeLineType === t && activeLineColor === c)
     })
     Object.entries(toolBtns).forEach(([name, { btn, img }]) => {
@@ -141,7 +181,7 @@ export function initToolbar(drawController) {
   // ── Build rows ────────────────────────────────────────────────────────────
   ROWS.forEach(({ L, R }) => {
 
-    // Left button
+    // ── Left button ────────────────────────────────────────────────────────
     const lBtn = document.createElement('button')
     lBtn.className = 'tool-btn'
     const lImg = document.createElement('img')
@@ -156,6 +196,7 @@ export function initToolbar(drawController) {
           activeLineType = null; activeLineColor = null
           lBtn.classList.remove('active')
           drawController.setActiveLine(null, null)
+          drawController.setTool('simple_select')
         } else {
           clearLine()
           activeTool = null; activeSymbol = null
@@ -175,7 +216,7 @@ export function initToolbar(drawController) {
     }
     grid.appendChild(lBtn)
 
-    // Right button
+    // ── Right button ───────────────────────────────────────────────────────
     const rBtn = document.createElement('button')
     rBtn.className = 'tool-btn'
     const rImg = document.createElement('img')
@@ -216,29 +257,35 @@ export function initToolbar(drawController) {
       rBtn.addEventListener('click', () => armSymbol(R.name))
       regSym(R.name, rBtn, rImg, true)
 
-    } else if (R.kind === 'slot') {
-      rBtn.title = `${R.name.replace(/_/g, ' ')} [${R.num}]`
-      rImg.src = offIcon(R.name)
-      rBtn.addEventListener('click', () => armSymbol(R.name))
+    } else if (R.kind === 'loc') {
+      const idx = R.num - 1
+      rBtn.className = 'tool-btn loc-btn'
+      rBtn.title = `Location ${R.num} — click to recall (save from left panel)`
+      rImg.src = '/icons/OFF.png'
+
       const badge = document.createElement('span')
-      badge.className = 'slot-num'
+      badge.className = 'loc-num'
       badge.textContent = R.num
       rBtn.appendChild(badge)
-      regSym(R.name, rBtn, rImg, false)  // slot: keep OFF icon, only outline changes
+
+      locBtns[idx] = { btn: rBtn, badge }
+
+      rBtn.addEventListener('click', () => recallLocSlot(idx))
     }
 
     grid.appendChild(rBtn)
   })
 
-  // Keyboard shortcuts 1-7
+  // Keyboard shortcuts 1-7: recall saved location
   window.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.metaKey || e.ctrlKey) return
     const n = parseInt(e.key)
-    if (n >= 1 && n <= SLOT_SYMBOLS.length) armSymbol(SLOT_SYMBOLS[n - 1])
+    if (n >= 1 && n <= LOC_COUNT) recallLocSlot(n - 1)
   })
 
   // Initial state
   syncAll()
+  locBtns.forEach((_, i) => syncLocBtn(i))
 
   // ── Power toggle ──────────────────────────────────────────────────────────
   let panelOpen = true

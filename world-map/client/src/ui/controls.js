@@ -196,6 +196,19 @@ export function initControls(map, drawContext, overlays, debug) {
         </div>
       </div>
 
+      <!-- LOCATIONS section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="locations">
+          <span class="sb-section-icon">📍</span>
+          <span class="sb-section-title">Locations</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-locations">
+          <div class="section-label">Saved positions (key 1–7 to recall)</div>
+          <div id="loc-slot-list"></div>
+        </div>
+      </div>
+
       <!-- GRIDLINES section -->
       <div class="sb-section">
         <div class="sb-section-header" data-section="gridlines">
@@ -378,6 +391,23 @@ export function initControls(map, drawContext, overlays, debug) {
     </div>
   `
   document.body.appendChild(panel)
+
+  // ── Sidebar toggle button ──────────────────────────────────────────────────
+  const sidebarToggle = document.createElement('button')
+  sidebarToggle.id = 'sidebar-toggle'
+  sidebarToggle.textContent = '<<'
+  sidebarToggle.title = 'Hide panel'
+  document.body.appendChild(sidebarToggle)
+
+  let sidebarOpen = true
+  sidebarToggle.addEventListener('click', () => {
+    sidebarOpen = !sidebarOpen
+    panel.classList.toggle('sidebar-hidden', !sidebarOpen)
+    document.getElementById('map').classList.toggle('sidebar-hidden', !sidebarOpen)
+    sidebarToggle.textContent = sidebarOpen ? '<<' : '>>'
+    sidebarToggle.title = sidebarOpen ? 'Hide panel' : 'Show panel'
+    sidebarToggle.classList.toggle('sidebar-closed', !sidebarOpen)
+  })
 
   // ── Restore initial UI states from localStorage ────────────────────────────
   document.getElementById(savedProjection === 'globe' ? 'btn-globe' : 'btn-mercator')
@@ -1057,6 +1087,105 @@ export function initControls(map, drawContext, overlays, debug) {
   })
 
   renderApPresets()
+
+  // ── Location slots ────────────────────────────────────────────────────────
+  ;(function () {
+    const LOC_COUNT = 7
+    const locs = Array.from({ length: LOC_COUNT }, (_, i) => {
+      const raw = localStorage.getItem(`wm_loc_${i + 1}`)
+      return raw ? JSON.parse(raw) : null
+    })
+
+    function saveLoc(idx) {
+      const c = map.getCenter()
+      locs[idx] = {
+        lat:     c.lat,
+        lng:     c.lng,
+        zoom:    map.getZoom(),
+        pitch:   map.getPitch(),
+        bearing: map.getBearing(),
+        altitude: typeof map.getCameraAltitude === 'function' ? map.getCameraAltitude() : null
+      }
+      localStorage.setItem(`wm_loc_${idx + 1}`, JSON.stringify(locs[idx]))
+      window.dispatchEvent(new CustomEvent('wm-loc-updated', { detail: { idx } }))
+      renderLocSlots()
+    }
+
+    function clearLoc(idx) {
+      locs[idx] = null
+      localStorage.removeItem(`wm_loc_${idx + 1}`)
+      window.dispatchEvent(new CustomEvent('wm-loc-updated', { detail: { idx } }))
+      renderLocSlots()
+    }
+
+    function recallLoc(idx) {
+      const loc = locs[idx]
+      if (!loc) return
+      map.flyTo({
+        center:   [loc.lng, loc.lat],
+        zoom:     loc.zoom,
+        pitch:    loc.pitch    ?? 0,
+        bearing:  loc.bearing  ?? 0,
+        duration: 1200,
+        essential: true
+      })
+    }
+
+    function fmtCoord(v, pos, neg) {
+      return `${Math.abs(v).toFixed(4)}° ${v >= 0 ? pos : neg}`
+    }
+
+    function renderLocSlots() {
+      const list = document.getElementById('loc-slot-list')
+      list.innerHTML = ''
+      for (let i = 0; i < LOC_COUNT; i++) {
+        const loc = locs[i]
+        const row = document.createElement('div')
+        row.className = 'loc-slot-row'
+
+        const num = document.createElement('span')
+        num.className = 'loc-slot-num'
+        num.textContent = i + 1
+
+        const info = document.createElement('span')
+        info.className = 'loc-slot-info'
+        if (loc) {
+          const alt = loc.altitude != null ? ` · ${Math.round(loc.altitude)}m` : ''
+          const tilt = loc.pitch ? ` · ${Math.round(loc.pitch)}°` : ''
+          info.textContent = `${fmtCoord(loc.lat,'N','S')}  ${fmtCoord(loc.lng,'E','W')}${alt}${tilt}`
+          info.title = info.textContent
+        } else {
+          info.textContent = 'Empty'
+          info.classList.add('loc-slot-empty')
+        }
+
+        const saveBtn = document.createElement('button')
+        saveBtn.className = 'loc-slot-btn'
+        saveBtn.textContent = '📍'
+        saveBtn.title = 'Save current view to this slot'
+        saveBtn.addEventListener('click', () => saveLoc(i))
+
+        const goBtn = document.createElement('button')
+        goBtn.className = 'loc-slot-btn'
+        goBtn.textContent = '→'
+        goBtn.title = 'Fly to this location'
+        goBtn.disabled = !loc
+        goBtn.addEventListener('click', () => recallLoc(i))
+
+        const delBtn = document.createElement('button')
+        delBtn.className = 'loc-slot-btn loc-slot-del'
+        delBtn.textContent = '×'
+        delBtn.title = 'Clear slot'
+        delBtn.disabled = !loc
+        delBtn.addEventListener('click', () => clearLoc(i))
+
+        row.append(num, info, saveBtn, goBtn, delBtn)
+        list.appendChild(row)
+      }
+    }
+
+    renderLocSlots()
+  })()
 
   // ── Country Style ──────────────────────────────────────────────────────────
   const countryStyle = initCountryStyle(map)

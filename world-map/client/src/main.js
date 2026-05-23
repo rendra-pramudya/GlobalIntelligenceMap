@@ -22,7 +22,7 @@ async function main() {
   const map = await initMap('map', savedProvider, savedStyle)
 
   const drawController = initDraw(map)
-  initToolbar(drawController)
+  initToolbar(drawController, map)
 
   const debug = initDebug()
 

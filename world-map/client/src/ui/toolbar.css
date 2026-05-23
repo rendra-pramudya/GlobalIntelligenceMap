@@ -81,14 +81,35 @@
 .tool-btn.active { outline: 2px solid #4488ff; outline-offset: 1px; }
 .tool-btn img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
-.slot-num {
+/* ── Location memory buttons ────────────────────────────────────────────────── */
+
+.loc-num {
   position: absolute;
-  bottom: 3px;
-  right: 4px;
-  font-size: 9px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
   font-weight: 700;
-  color: rgba(255,255,255,0.65);
+  color: rgba(255,255,255,0.45);
   line-height: 1;
   pointer-events: none;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  letter-spacing: -1px;
+}
+
+/* Saved slot: number lights up */
+.loc-btn.loc-saved .loc-num {
+  color: #44ccff;
+  text-shadow: 0 0 6px rgba(68,204,255,0.7), 0 1px 2px rgba(0,0,0,0.9);
+}
+
+/* Brief flash when saving */
+@keyframes loc-save-flash {
+  0%   { outline-color: #44ccff; outline-width: 3px; }
+  100% { outline-color: transparent; outline-width: 0; }
+}
+.loc-btn.loc-flash {
+  animation: loc-save-flash 0.4s ease-out forwards;
+  outline: 3px solid #44ccff;
+  outline-offset: 1px;
 }
