@@ -122,6 +122,11 @@ export function initDraw(map) {
   let symPathCoords    = []      // coords collected during gesture
   let _suppressNextClick = false // set after a committed path to block map click
 
+  // ── SELECT4 state ─────────────────────────────────────────────────────────
+  let select4Mode        = false
+  const select4Selected  = new Set()  // symIds currently selected
+  let select4PendingDest = false       // waiting for destination pointerup
+
   // ── Animation state ───────────────────────────────────────────────────────
   const animJobs = new Map()  // symId → { coords, startTime, duration, done }
   let   animRafId = null
@@ -181,6 +186,23 @@ export function initDraw(map) {
     const src = map.getSource('draw-symbols-source')
     if (src) src.setData({ type: 'FeatureCollection', features: Array.from(localSymbols.values()) })
   }
+
+  // ── SELECT4 selection rings ───────────────────────────────────────────────
+  map.addSource('select4-source', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  })
+  map.addLayer({
+    id: 'select4-rings',
+    type: 'circle',
+    source: 'select4-source',
+    paint: {
+      'circle-radius': 22,
+      'circle-color': 'rgba(0,0,0,0)',
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#00ffff'
+    }
+  })
 
   // ── Freehand preview layer ────────────────────────────────────────────────
   map.addSource('freehand-src', {
@@ -397,6 +419,29 @@ export function initDraw(map) {
     startSymbolAnimation(symId, coords)
   }
 
+  // ── SELECT4 helpers ───────────────────────────────────────────────────────
+  function updateSelect4Rings() {
+    const src = map.getSource('select4-source')
+    if (!src) return
+    const features = []
+    select4Selected.forEach(id => {
+      const s = localSymbols.get(id)
+      if (s) features.push({ type: 'Feature', geometry: { ...s.geometry }, properties: { id } })
+    })
+    src.setData({ type: 'FeatureCollection', features })
+  }
+
+  function moveSelectedToDestination(lng, lat) {
+    select4Selected.forEach(symId => {
+      const feat = localSymbols.get(symId)
+      if (!feat) return
+      const from = feat.geometry.coordinates
+      startSymbolAnimation(symId, [from, [lng, lat]], 3000)
+    })
+    select4Selected.clear()
+    updateSelect4Rings()
+  }
+
   // ── Freehand events — Pointer Events API ─────────────────────────────────
   // Unified mouse / touch / pen handling (ported from reference HTML project).
   // Using raw DOM Pointer Events lets us: (a) track a single pointer ID so
@@ -457,6 +502,31 @@ export function initDraw(map) {
       symPathThreshMet = false
       symPathCoords    = [[ll.lng, ll.lat]]
       map.dragPan.disable()
+      return
+    }
+
+    // ── Case 4: SELECT4 — click symbol to toggle, click empty to send ─────
+    if (select4Mode) {
+      const r  = mapEl.getBoundingClientRect()
+      const px = e.clientX - r.left
+      const py = e.clientY - r.top
+      const hits = map.queryRenderedFeatures([[px-14, py-14], [px+14, py+14]], { layers: ['draw-symbols-layer'] })
+      const hit  = hits.find(f => localSymbols.has(f.properties.id))
+      if (hit) {
+        const id = hit.properties.id
+        if (select4Selected.has(id)) select4Selected.delete(id)
+        else select4Selected.add(id)
+        updateSelect4Rings()
+        e.preventDefault()
+        e.stopPropagation()
+      } else if (select4Selected.size > 0) {
+        e.preventDefault()
+        e.stopPropagation()
+        _activePtrId       = e.pointerId
+        select4PendingDest = true
+        map.dragPan.disable()
+      }
+      return
     }
   }, { passive: false })
 
@@ -483,8 +553,11 @@ export function initDraw(map) {
         const prevPx = map.project(symDragPrev)
         const curPx  = map.project([ll.lng, ll.lat])
         let bearing  = feat.properties.bearing ?? 0
-        if (Math.hypot(prevPx.x - curPx.x, prevPx.y - curPx.y) > 2) {
-          bearing    = bearingDeg(symDragPrev, [ll.lng, ll.lat])
+        if (Math.hypot(prevPx.x - curPx.x, prevPx.y - curPx.y) > 4) {
+          const raw  = bearingDeg(symDragPrev, [ll.lng, ll.lat])
+          // Exponential smoothing — shortest-angle diff handles 0/360 wrap
+          const diff = ((raw - bearing) + 540) % 360 - 180
+          bearing     = (bearing + diff * 0.25 + 360) % 360
           symDragPrev = [ll.lng, ll.lat]
         }
         localSymbols.set(symDragId, {
@@ -516,14 +589,20 @@ export function initDraw(map) {
     }
   }, { passive: false })
 
-  // Hover cursor: show 'grab' when hovering a symbol in MOVE mode
+  // Hover cursor: MOVE mode = grab, SELECT4 mode = pointer over symbols
   mapEl.addEventListener('mousemove', (e) => {
-    if (!symbolMoveMode || symDragging) return
+    if (symDragging || select4PendingDest) return
+    if (!symbolMoveMode && !select4Mode) return
     const r  = mapEl.getBoundingClientRect()
     const px = e.clientX - r.left
     const py = e.clientY - r.top
     const hits = map.queryRenderedFeatures([[px-14, py-14], [px+14, py+14]], { layers: ['draw-symbols-layer'] })
-    mapEl.style.cursor = hits.some(f => localSymbols.has(f.properties.id)) ? 'grab' : 'default'
+    const over = hits.some(f => localSymbols.has(f.properties.id))
+    if (symbolMoveMode) {
+      mapEl.style.cursor = over ? 'grab' : 'default'
+    } else {
+      mapEl.style.cursor = over ? 'pointer' : (select4Selected.size > 0 ? 'crosshair' : 'default')
+    }
   })
 
   function onPointerEnd(e) {
@@ -564,6 +643,18 @@ export function initDraw(map) {
       }
       symPathCoords    = []
       symPathThreshMet = false
+      return
+    }
+
+    // ── Case 4: SELECT4 destination commit ────────────────────────────────
+    if (select4PendingDest) {
+      select4PendingDest = false
+      _activePtrId       = null
+      map.dragPan.enable()
+      if (e.type !== 'pointercancel' && select4Selected.size > 0) {
+        const ll = lngLatFromPtr(e)
+        moveSelectedToDestination(ll.lng, ll.lat)
+      }
     }
   }
   mapEl.addEventListener('pointerup',     onPointerEnd, { passive: false })
@@ -663,6 +754,12 @@ export function initDraw(map) {
       _activePtrId = null
       map.dragPan.enable()
     }
+    // Always reset SELECT4 state; re-enabled below if needed
+    if (select4PendingDest) { map.dragPan.enable() }
+    select4Mode        = false
+    select4PendingDest = false
+    select4Selected.clear()
+    updateSelect4Rings()
 
     if (mode === 'freehand_line' || mode === 'freehand_polygon') {
       freehandMode   = mode === 'freehand_line' ? 'line' : 'polygon'
@@ -673,6 +770,13 @@ export function initDraw(map) {
     } else if (mode === 'symbol_move') {
       freehandMode   = null
       symbolMoveMode = true
+      draw.changeMode('simple_select')
+      mapEl.style.cursor      = 'default'
+      mapEl.style.touchAction = 'none'
+    } else if (mode === 'symbol_select4') {
+      freehandMode   = null
+      symbolMoveMode = false
+      select4Mode    = true
       draw.changeMode('simple_select')
       mapEl.style.cursor      = 'default'
       mapEl.style.touchAction = 'none'
