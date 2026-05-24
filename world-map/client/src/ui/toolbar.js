@@ -19,9 +19,12 @@ const ROWS = [
 ]
 
 function cap(s) { return s.charAt(0) + s.slice(1).toLowerCase() }
-function offIcon(name) { return `/icons/${name}_OFF.png` }
+function offIcon(name) {
+  const ov = { SELECT4: '/icons/SELECT4_OFF.jpg' }
+  return ov[name] ?? `/icons/${name}_OFF.png`
+}
 function onIcon(name) {
-  const ov = { PUBLIC_HELICOPTER: '/icons/PUBLICK_HELICOPTER_ON.png' }
+  const ov = { PUBLIC_HELICOPTER: '/icons/PUBLICK_HELICOPTER_ON.png', SELECT4: '/icons/SELECT4_ON.jpg' }
   return ov[name] ?? `/icons/${name}_ON.png`
 }
 
