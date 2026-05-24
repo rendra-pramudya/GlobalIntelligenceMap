@@ -2,7 +2,7 @@ import './toolbar.css'
 
 const ROWS = [
   { L: { kind: 'line',   type: 'STROKE', color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'INTERACTIVE', mode: 'simple_select',    title: 'Select' } },
-  { L: { kind: 'line',   type: 'FILL',   color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'MOVE',        mode: 'simple_select',    title: 'Move' } },
+  { L: { kind: 'line',   type: 'FILL',   color: 'RED',    lm: 'freehand_polygon' }, R: { kind: 'tool',   name: 'MOVE',        mode: 'symbol_move',      title: 'Move' } },
   { L: { kind: 'line',   type: 'DASHED', color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'PEN',         mode: 'freehand_line',    title: 'Draw line' } },
   { L: { kind: 'line',   type: 'ARROW',  color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
   { L: { kind: 'line',   type: 'STROKE', color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'action', name: 'UNDO',   title: 'Undo' } },

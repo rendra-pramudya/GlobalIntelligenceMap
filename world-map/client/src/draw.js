@@ -108,6 +108,12 @@ export function initDraw(map) {
 
   const mapEl = map.getContainer()
 
+  // ── Symbol-move (MOVE tool) state ────────────────────────────────────────
+  let symbolMoveMode = false   // true when MOVE tool is active
+  let symDragging    = false   // actively dragging a symbol
+  let symDragId      = null    // id of the symbol being dragged
+  let symDragPrev    = null    // last [lng, lat] for bearing computation
+
   // ── Symbol-path gesture state ─────────────────────────────────────────────
   // When a symbol is armed and the user drags instead of clicking, we draw a
   // vehicle path and animate the icon along it (ported from reference project).
@@ -422,7 +428,28 @@ export function initDraw(map) {
       return
     }
 
-    // ── Case 2: symbol armed → track for potential vehicle-path gesture ─────
+    // ── Case 2: MOVE tool — hit-test symbols, drag if found ───────────────
+    if (symbolMoveMode) {
+      const r  = mapEl.getBoundingClientRect()
+      const px = e.clientX - r.left
+      const py = e.clientY - r.top
+      const hits = map.queryRenderedFeatures([[px-14, py-14], [px+14, py+14]], { layers: ['draw-symbols-layer'] })
+      const hit  = hits.find(f => localSymbols.has(f.properties.id))
+      if (hit) {
+        e.preventDefault()
+        e.stopPropagation()
+        _activePtrId = e.pointerId
+        symDragging  = true
+        symDragId    = hit.properties.id
+        symDragPrev  = [ll.lng, ll.lat]
+        map.dragPan.disable()
+        mapEl.style.cursor = 'grabbing'
+      }
+      // No hit → fall through so MapLibre can pan the map normally
+      return
+    }
+
+    // ── Case 3: symbol armed → track for potential vehicle-path gesture ────
     if (activeSymbol) {
       e.preventDefault()
       _activePtrId     = e.pointerId
@@ -447,7 +474,30 @@ export function initDraw(map) {
       return
     }
 
-    // ── Case 2: symbol path tracking ──────────────────────────────────────
+    // ── Case 2: symbol drag ────────────────────────────────────────────────
+    if (symDragging) {
+      e.preventDefault()
+      e.stopPropagation()
+      const feat = localSymbols.get(symDragId)
+      if (feat) {
+        const prevPx = map.project(symDragPrev)
+        const curPx  = map.project([ll.lng, ll.lat])
+        let bearing  = feat.properties.bearing ?? 0
+        if (Math.hypot(prevPx.x - curPx.x, prevPx.y - curPx.y) > 2) {
+          bearing    = bearingDeg(symDragPrev, [ll.lng, ll.lat])
+          symDragPrev = [ll.lng, ll.lat]
+        }
+        localSymbols.set(symDragId, {
+          ...feat,
+          geometry:   { type: 'Point', coordinates: [ll.lng, ll.lat] },
+          properties: { ...feat.properties, bearing }
+        })
+        updateSymbolSource()
+      }
+      return
+    }
+
+    // ── Case 3: symbol path tracking ──────────────────────────────────────
     if (symPathTracking) {
       e.preventDefault()
       symPathCoords.push([ll.lng, ll.lat])
@@ -466,6 +516,16 @@ export function initDraw(map) {
     }
   }, { passive: false })
 
+  // Hover cursor: show 'grab' when hovering a symbol in MOVE mode
+  mapEl.addEventListener('mousemove', (e) => {
+    if (!symbolMoveMode || symDragging) return
+    const r  = mapEl.getBoundingClientRect()
+    const px = e.clientX - r.left
+    const py = e.clientY - r.top
+    const hits = map.queryRenderedFeatures([[px-14, py-14], [px+14, py+14]], { layers: ['draw-symbols-layer'] })
+    mapEl.style.cursor = hits.some(f => localSymbols.has(f.properties.id)) ? 'grab' : 'default'
+  })
+
   function onPointerEnd(e) {
     if (e.pointerId !== _activePtrId) return
 
@@ -475,7 +535,20 @@ export function initDraw(map) {
       return
     }
 
-    // ── Case 2: symbol path commit or click ───────────────────────────────
+    // ── Case 2: symbol drag end ────────────────────────────────────────────
+    if (symDragging) {
+      symDragging  = false
+      _activePtrId = null
+      map.dragPan.enable()
+      mapEl.style.cursor = 'default'
+      const feat = localSymbols.get(symDragId)
+      if (feat) socket.send(JSON.stringify({ type: 'symbol_create', feature: feat }))
+      symDragId   = null
+      symDragPrev = null
+      return
+    }
+
+    // ── Case 3: symbol path commit or click ───────────────────────────────
     if (symPathTracking) {
       symPathTracking = false
       _activePtrId    = null
@@ -486,7 +559,6 @@ export function initDraw(map) {
         _suppressNextClick = true
         commitSymbolPath([...symPathCoords], activeSymbol)
       } else if (activeSymbol && symPathCoords.length > 0) {
-        // Short tap → static placement
         _suppressNextClick = true
         placeSymbolAt(activeSymbol, symPathCoords[0])
       }
@@ -574,7 +646,7 @@ export function initDraw(map) {
 
   // ── Public API ────────────────────────────────────────────────────────────
   function setTool(mode) {
-    // Cancel any in-progress freehand stroke
+    // Cancel any in-progress operations
     if (freehandDrawing) {
       freehandDrawing  = false
       _activePtrId     = null
@@ -584,14 +656,29 @@ export function initDraw(map) {
       clearFreehandPreview()
       freehandCoords = []
     }
+    if (symDragging) {
+      symDragging  = false
+      symDragId    = null
+      symDragPrev  = null
+      _activePtrId = null
+      map.dragPan.enable()
+    }
 
     if (mode === 'freehand_line' || mode === 'freehand_polygon') {
-      freehandMode = mode === 'freehand_line' ? 'line' : 'polygon'
+      freehandMode   = mode === 'freehand_line' ? 'line' : 'polygon'
+      symbolMoveMode = false
       draw.changeMode('freehand_guard')
       mapEl.style.cursor      = 'crosshair'
-      mapEl.style.touchAction = 'none'     // prevent OS scroll/zoom stealing the gesture
+      mapEl.style.touchAction = 'none'
+    } else if (mode === 'symbol_move') {
+      freehandMode   = null
+      symbolMoveMode = true
+      draw.changeMode('simple_select')
+      mapEl.style.cursor      = 'default'
+      mapEl.style.touchAction = 'none'
     } else {
-      freehandMode = null
+      freehandMode   = null
+      symbolMoveMode = false
       draw.changeMode(mode)
       mapEl.style.cursor      = ''
       mapEl.style.touchAction = ''
@@ -600,7 +687,7 @@ export function initDraw(map) {
 
   function setActiveSymbol(name) {
     activeSymbol = name
-    if (!freehandMode) {
+    if (!freehandMode && !symbolMoveMode) {
       mapEl.style.cursor      = name ? 'crosshair' : ''
       mapEl.style.touchAction = name ? 'none'       : ''
     }
