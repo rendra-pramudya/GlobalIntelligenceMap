@@ -7,7 +7,7 @@ const ROWS = [
   { L: { kind: 'line',   type: 'ARROW',  color: 'RED',    lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'RULER',       mode: 'freehand_polygon', title: 'Draw polygon' } },
   { L: { kind: 'line',   type: 'STROKE', color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'action', name: 'UNDO',   title: 'Undo' } },
   { L: { kind: 'line',   type: 'FILL',   color: 'YELLOW', lm: 'freehand_polygon' }, R: { kind: 'action', name: 'DELETE', title: 'Delete selected' } },
-  { L: { kind: 'line',   type: 'DASHED', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'symbol', name: 'SELECT4', title: 'Select4' } },
+  { L: { kind: 'line',   type: 'DASHED', color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'tool',   name: 'SELECT4', mode: 'symbol_select4', title: 'Select4' } },
   { L: { kind: 'line',   type: 'ARROW',  color: 'YELLOW', lm: 'freehand_line'    }, R: { kind: 'symbol', name: 'DRONE', title: 'Drone' } },
   { L: { kind: 'symbol', name: 'SOLDIER'    }, R: { kind: 'loc', num: 1 } },
   { L: { kind: 'symbol', name: 'JETFIGHTER' }, R: { kind: 'loc', num: 2 } },
