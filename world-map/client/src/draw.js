@@ -483,8 +483,11 @@ export function initDraw(map) {
         const prevPx = map.project(symDragPrev)
         const curPx  = map.project([ll.lng, ll.lat])
         let bearing  = feat.properties.bearing ?? 0
-        if (Math.hypot(prevPx.x - curPx.x, prevPx.y - curPx.y) > 2) {
-          bearing    = bearingDeg(symDragPrev, [ll.lng, ll.lat])
+        if (Math.hypot(prevPx.x - curPx.x, prevPx.y - curPx.y) > 4) {
+          const raw  = bearingDeg(symDragPrev, [ll.lng, ll.lat])
+          // Exponential smoothing — shortest-angle diff handles 0/360 wrap
+          const diff = ((raw - bearing) + 540) % 360 - 180
+          bearing     = (bearing + diff * 0.25 + 360) % 360
           symDragPrev = [ll.lng, ll.lat]
         }
         localSymbols.set(symDragId, {
