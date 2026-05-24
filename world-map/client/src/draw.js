@@ -144,13 +144,28 @@ export function initDraw(map) {
   registerArrowImages(map)
   map.on('style.load', () => registerArrowImages(map))
 
-  // Lazy-load symbol images (non-arrow)
+  // Lazy-load symbol images (non-arrow).
+  // Preference order: _MAP.png → _MAP.gif → _OFF.png
+  function loadSymbolImage(name) {
+    const candidates = [
+      `/icons/${name}_MAP.png`,
+      `/icons/${name}_MAP.gif`,
+      `/icons/${name}_OFF.png`,
+    ]
+    function tryNext(i) {
+      if (i >= candidates.length) return
+      const img = new Image()
+      img.onload  = () => { if (!map.hasImage(name)) map.addImage(name, img) }
+      img.onerror = () => tryNext(i + 1)
+      img.src = candidates[i]
+    }
+    tryNext(0)
+  }
+
   map.on('styleimagemissing', (e) => {
     const name = e.id
     if (name.startsWith('wm_arrow_')) { registerArrowImages(map); return }
-    const img = new Image()
-    img.onload = () => { if (!map.hasImage(name)) map.addImage(name, img) }
-    img.src = `/icons/${name}_OFF.png`
+    loadSymbolImage(name)
   })
 
   // In-memory symbol store
