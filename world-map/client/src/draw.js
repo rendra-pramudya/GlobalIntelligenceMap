@@ -123,9 +123,11 @@ export function initDraw(map) {
   let _suppressNextClick = false // set after a committed path to block map click
 
   // ── SELECT4 state ─────────────────────────────────────────────────────────
-  let select4Mode        = false
-  const select4Selected  = new Set()  // symIds currently selected
-  let select4PendingDest = false       // waiting for destination pointerup
+  let select4Mode          = false
+  const select4Selected    = new Set()  // symIds currently selected
+  let select4MarqueeActive = false      // rubber-band drag in progress
+  let select4MarqueeStart  = null       // [lng, lat] at pointerdown
+  let select4MarqueeStartPx = null      // {x, y} pixels at pointerdown (threshold check)
 
   // ── Animation state ───────────────────────────────────────────────────────
   const animJobs = new Map()  // symId → { coords, startTime, duration, done }
@@ -228,6 +230,24 @@ export function initDraw(map) {
       'circle-stroke-width': 2,
       'circle-stroke-color': '#00ffff'
     }
+  })
+
+  // ── SELECT4 marquee rectangle ─────────────────────────────────────────────
+  map.addSource('select4-marquee', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  })
+  map.addLayer({
+    id: 'select4-marquee-fill',
+    type: 'fill',
+    source: 'select4-marquee',
+    paint: { 'fill-color': '#00aaff', 'fill-opacity': 0.1 }
+  })
+  map.addLayer({
+    id: 'select4-marquee-stroke',
+    type: 'line',
+    source: 'select4-marquee',
+    paint: { 'line-color': '#00aaff', 'line-width': 2, 'line-dasharray': [4, 3] }
   })
 
   // ── Freehand preview layer ────────────────────────────────────────────────
@@ -457,12 +477,65 @@ export function initDraw(map) {
     src.setData({ type: 'FeatureCollection', features })
   }
 
-  function moveSelectedToDestination(lng, lat) {
-    select4Selected.forEach(symId => {
+  function updateMarqueeRect(startLngLat, curLngLat) {
+    const [x0, y0] = [Math.min(startLngLat[0], curLngLat[0]), Math.min(startLngLat[1], curLngLat[1])]
+    const [x1, y1] = [Math.max(startLngLat[0], curLngLat[0]), Math.max(startLngLat[1], curLngLat[1])]
+    map.getSource('select4-marquee')?.setData({ type: 'FeatureCollection', features: [{
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [[[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]]] },
+      properties: {}
+    }]})
+  }
+
+  function clearMarqueeRect() {
+    map.getSource('select4-marquee')?.setData({ type: 'FeatureCollection', features: [] })
+  }
+
+  function selectSymbolsInBounds(swLng, swLat, neLng, neLat) {
+    select4Selected.clear()
+    localSymbols.forEach((feat, id) => {
+      const [lng, lat] = feat.geometry.coordinates
+      if (lng >= swLng && lng <= neLng && lat >= swLat && lat <= neLat) select4Selected.add(id)
+    })
+    updateSelect4Rings()
+  }
+
+  // Geodesic destination point (ported from reference project)
+  function geoDestination(fromLng, fromLat, distanceM, bearingDeg) {
+    const R   = 6371000
+    const br  = bearingDeg * Math.PI / 180
+    const lat1 = fromLat * Math.PI / 180
+    const lng1 = fromLng * Math.PI / 180
+    const dr   = distanceM / R
+    const sinLat2 = Math.sin(lat1) * Math.cos(dr) + Math.cos(lat1) * Math.sin(dr) * Math.cos(br)
+    const lat2    = Math.asin(sinLat2)
+    const y = Math.sin(br) * Math.sin(dr) * Math.cos(lat1)
+    const x = Math.cos(dr) - Math.sin(lat1) * sinLat2
+    const lng2 = lng1 + Math.atan2(y, x)
+    return [(lng2 * 180 / Math.PI + 540) % 360 - 180, lat2 * 180 / Math.PI]
+  }
+
+  function moveSelectedToDestination(destLng, destLat) {
+    const ids = [...select4Selected]
+    const n   = ids.length
+    // Spread units into concentric hexagonal rings (6 per ring, 150 m spacing)
+    const targets = []
+    if (n === 1) {
+      targets.push([destLng, destLat])
+    } else {
+      let remaining = n, ring = 1
+      while (remaining > 0) {
+        const onRing = Math.min(remaining, 6 * ring)
+        for (let j = 0; j < onRing; j++)
+          targets.push(geoDestination(destLng, destLat, 150 * ring, (360 / onRing) * j))
+        remaining -= onRing
+        ring++
+      }
+    }
+    ids.forEach((symId, i) => {
       const feat = localSymbols.get(symId)
       if (!feat) return
-      const from = feat.geometry.coordinates
-      startSymbolAnimation(symId, [from, [lng, lat]], 3000)
+      startSymbolAnimation(symId, [feat.geometry.coordinates, targets[Math.min(i, targets.length - 1)]], 3000)
     })
     select4Selected.clear()
     updateSelect4Rings()
@@ -531,7 +604,7 @@ export function initDraw(map) {
       return
     }
 
-    // ── Case 4: SELECT4 — click symbol to toggle, click empty to send ─────
+    // ── Case 4: SELECT4 — click/drag for marquee or tap-to-move ─────────
     if (select4Mode) {
       const r  = mapEl.getBoundingClientRect()
       const px = e.clientX - r.left
@@ -539,17 +612,21 @@ export function initDraw(map) {
       const hits = map.queryRenderedFeatures([[px-14, py-14], [px+14, py+14]], { layers: ['draw-symbols-layer'] })
       const hit  = hits.find(f => localSymbols.has(f.properties.id))
       if (hit) {
+        // Click on a symbol → toggle selection, no pointer capture needed
         const id = hit.properties.id
         if (select4Selected.has(id)) select4Selected.delete(id)
         else select4Selected.add(id)
         updateSelect4Rings()
         e.preventDefault()
         e.stopPropagation()
-      } else if (select4Selected.size > 0) {
+      } else {
+        // Click on empty area → capture to determine: marquee drag or tap-to-move
         e.preventDefault()
         e.stopPropagation()
-        _activePtrId       = e.pointerId
-        select4PendingDest = true
+        _activePtrId          = e.pointerId
+        select4MarqueeStart   = [ll.lng, ll.lat]
+        select4MarqueeStartPx = { x: px, y: py }
+        select4MarqueeActive  = false
         map.dragPan.disable()
       }
       return
@@ -612,12 +689,26 @@ export function initDraw(map) {
           properties: {}
         }]})
       }
+      return
+    }
+
+    // ── Case 4: SELECT4 marquee tracking ──────────────────────────────────
+    if (select4MarqueeStart) {
+      e.preventDefault()
+      e.stopPropagation()
+      const r  = mapEl.getBoundingClientRect()
+      const px = e.clientX - r.left
+      const py = e.clientY - r.top
+      const dx = Math.abs(px - select4MarqueeStartPx.x)
+      const dy = Math.abs(py - select4MarqueeStartPx.y)
+      if (!select4MarqueeActive && Math.max(dx, dy) >= 12) select4MarqueeActive = true
+      if (select4MarqueeActive) updateMarqueeRect(select4MarqueeStart, [ll.lng, ll.lat])
     }
   }, { passive: false })
 
   // Hover cursor: MOVE mode = grab, SELECT4 mode = pointer over symbols
   mapEl.addEventListener('mousemove', (e) => {
-    if (symDragging || select4PendingDest) return
+    if (symDragging || select4MarqueeActive) return
     if (!symbolMoveMode && !select4Mode) return
     const r  = mapEl.getBoundingClientRect()
     const px = e.clientX - r.left
@@ -672,14 +763,31 @@ export function initDraw(map) {
       return
     }
 
-    // ── Case 4: SELECT4 destination commit ────────────────────────────────
-    if (select4PendingDest) {
-      select4PendingDest = false
-      _activePtrId       = null
+    // ── Case 4: SELECT4 — complete marquee or issue move command ─────────
+    if (select4MarqueeStart) {
+      const wasMarquee = select4MarqueeActive
+      const savedStart = select4MarqueeStart  // capture before clearing
+      select4MarqueeActive  = false
+      select4MarqueeStart   = null
+      select4MarqueeStartPx = null
+      _activePtrId          = null
       map.dragPan.enable()
-      if (e.type !== 'pointercancel' && select4Selected.size > 0) {
-        const ll = lngLatFromPtr(e)
-        moveSelectedToDestination(ll.lng, ll.lat)
+      clearMarqueeRect()
+
+      if (e.type === 'pointercancel') return
+
+      if (wasMarquee) {
+        // Drag ended — select all symbols inside the rectangle
+        const ll2 = lngLatFromPtr(e)
+        const swLng = Math.min(savedStart[0], ll2.lng)
+        const swLat = Math.min(savedStart[1], ll2.lat)
+        const neLng = Math.max(savedStart[0], ll2.lng)
+        const neLat = Math.max(savedStart[1], ll2.lat)
+        selectSymbolsInBounds(swLng, swLat, neLng, neLat)
+      } else if (select4Selected.size > 0) {
+        // Tap on empty area — move selected symbols to this point
+        const ll2 = lngLatFromPtr(e)
+        moveSelectedToDestination(ll2.lng, ll2.lat)
       }
     }
   }
@@ -781,10 +889,13 @@ export function initDraw(map) {
       map.dragPan.enable()
     }
     // Always reset SELECT4 state; re-enabled below if needed
-    if (select4PendingDest) { map.dragPan.enable() }
-    select4Mode        = false
-    select4PendingDest = false
+    if (select4MarqueeStart) { map.dragPan.enable() }
+    select4Mode           = false
+    select4MarqueeActive  = false
+    select4MarqueeStart   = null
+    select4MarqueeStartPx = null
     select4Selected.clear()
+    clearMarqueeRect()
     updateSelect4Rings()
 
     if (mode === 'freehand_line' || mode === 'freehand_polygon') {
