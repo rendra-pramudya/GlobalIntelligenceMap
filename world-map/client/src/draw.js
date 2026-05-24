@@ -157,8 +157,22 @@ export function initDraw(map) {
 
   // Lazy-load symbol images (non-arrow).
   // Preference order: _MAP.png → _MAP.gif → _OFF.png
-  // GIF images get a periodic updateImage loop so the animation plays.
-  const gifUpdaters = new Map()  // imageName → intervalId
+  // GIF images: draw each frame onto an offscreen canvas so ctx.drawImage()
+  // captures the current animated frame, then push it into the map texture.
+  const gifAnimations = new Map()  // name → { img, canvas, ctx }
+  let gifRafId = null
+
+  function gifAnimTick() {
+    if (gifAnimations.size === 0) { gifRafId = null; return }
+    gifAnimations.forEach(({ img, canvas, ctx }, name) => {
+      if (!map.hasImage(name)) { gifAnimations.delete(name); return }
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0)
+      map.updateImage(name, canvas)
+    })
+    map.triggerRepaint()
+    gifRafId = requestAnimationFrame(gifAnimTick)
+  }
 
   function loadSymbolImage(name) {
     const candidates = [
@@ -171,12 +185,12 @@ export function initDraw(map) {
       const img = new Image()
       img.onload = () => {
         if (!map.hasImage(name)) map.addImage(name, img)
-        if (candidates[i].endsWith('.gif') && !gifUpdaters.has(name)) {
-          const id = setInterval(() => {
-            if (map.hasImage(name)) map.updateImage(name, img)
-            else { clearInterval(id); gifUpdaters.delete(name) }
-          }, 80)
-          gifUpdaters.set(name, id)
+        if (candidates[i].endsWith('.gif') && !gifAnimations.has(name)) {
+          const canvas = document.createElement('canvas')
+          canvas.width  = img.naturalWidth  || 64
+          canvas.height = img.naturalHeight || 64
+          gifAnimations.set(name, { img, canvas, ctx: canvas.getContext('2d') })
+          if (!gifRafId) gifRafId = requestAnimationFrame(gifAnimTick)
         }
       }
       img.onerror = () => tryNext(i + 1)
