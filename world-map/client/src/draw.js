@@ -158,10 +158,40 @@ export function initDraw(map) {
   map.on('style.load', () => registerArrowImages(map))
 
   // Lazy-load symbol images (non-arrow).
-  // Preference order: _MAP.png → _MAP.gif → _OFF.png
-  // GIF images: draw each frame onto an offscreen canvas so ctx.drawImage()
-  // captures the current animated frame, then push it into the map texture.
-  const gifAnimations = new Map()  // name → { img, canvas, ctx }
+  // Candidates: _MAP_sheet.png (spritesheet) → _MAP.png → _MAP.gif → _OFF.png
+  // Spritesheets are animated via a shared RAF loop that steps frame indices.
+  const SHEET_CONFIG = {
+    HELICOPTER: { cols: 6, rows: 5, frames: 30, fps: 33, fw: 64, fh: 64 },
+  }
+
+  const sheetAnimations = new Map()  // name → { img, canvas, ctx, cfg, frame, elapsed }
+  let   sheetRafId      = null
+  let   sheetLastTs     = null
+
+  function sheetAnimTick(ts) {
+    if (sheetAnimations.size === 0) { sheetRafId = null; sheetLastTs = null; return }
+    const dt = sheetLastTs != null ? ts - sheetLastTs : 0
+    sheetLastTs = ts
+    sheetAnimations.forEach((anim, name) => {
+      if (!map.hasImage(name)) { sheetAnimations.delete(name); return }
+      anim.elapsed += dt
+      const msPerFrame = 1000 / anim.cfg.fps
+      if (anim.elapsed >= msPerFrame) {
+        anim.frame    = (anim.frame + Math.floor(anim.elapsed / msPerFrame)) % anim.cfg.frames
+        anim.elapsed  %= msPerFrame
+        const col = anim.frame % anim.cfg.cols
+        const row = Math.floor(anim.frame / anim.cfg.cols)
+        anim.ctx.clearRect(0, 0, anim.cfg.fw, anim.cfg.fh)
+        anim.ctx.drawImage(anim.img, col * anim.cfg.fw, row * anim.cfg.fh, anim.cfg.fw, anim.cfg.fh, 0, 0, anim.cfg.fw, anim.cfg.fh)
+        map.updateImage(name, anim.canvas)
+      }
+    })
+    map.triggerRepaint()
+    sheetRafId = requestAnimationFrame(sheetAnimTick)
+  }
+
+  // GIF fallback: offscreen canvas RAF (browser animates the <img> element)
+  const gifAnimations = new Map()
   let gifRafId = null
 
   function gifAnimTick() {
@@ -177,25 +207,36 @@ export function initDraw(map) {
   }
 
   function loadSymbolImage(name) {
-    const candidates = [
-      `/icons/${name}_MAP.png`,
-      `/icons/${name}_MAP.gif`,
-      `/icons/${name}_OFF.png`,
-    ]
+    const cfg = SHEET_CONFIG[name]
+    const candidates = cfg
+      ? [`/icons/${name}_MAP_sheet.png`]
+      : [`/icons/${name}_MAP.png`, `/icons/${name}_MAP.gif`, `/icons/${name}_OFF.png`]
+
     function tryNext(i) {
       if (i >= candidates.length) return
       const img = new Image()
       img.onload = () => {
-        if (!map.hasImage(name)) map.addImage(name, img)
-        if (candidates[i].endsWith('.gif') && !gifAnimations.has(name)) {
+        if (cfg) {
+          // Spritesheet: seed the map with frame 0, then animate
           const canvas = document.createElement('canvas')
-          canvas.width  = img.naturalWidth  || 64
-          canvas.height = img.naturalHeight || 64
-          gifAnimations.set(name, { img, canvas, ctx: canvas.getContext('2d') })
-          if (!gifRafId) gifRafId = requestAnimationFrame(gifAnimTick)
+          canvas.width = cfg.fw; canvas.height = cfg.fh
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
+          if (!map.hasImage(name)) map.addImage(name, canvas)
+          sheetAnimations.set(name, { img, canvas, ctx, cfg, frame: 0, elapsed: 0 })
+          if (!sheetRafId) sheetRafId = requestAnimationFrame(sheetAnimTick)
+        } else {
+          if (!map.hasImage(name)) map.addImage(name, img)
+          if (candidates[i].endsWith('.gif') && !gifAnimations.has(name)) {
+            const canvas = document.createElement('canvas')
+            canvas.width  = img.naturalWidth  || 64
+            canvas.height = img.naturalHeight || 64
+            gifAnimations.set(name, { img, canvas, ctx: canvas.getContext('2d') })
+            if (!gifRafId) gifRafId = requestAnimationFrame(gifAnimTick)
+          }
         }
       }
-      img.onerror = () => tryNext(i + 1)
+      img.onerror = () => { if (!cfg) tryNext(i + 1) }
       img.src = candidates[i]
     }
     tryNext(0)
