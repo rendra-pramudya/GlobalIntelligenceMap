@@ -157,6 +157,9 @@ export function initDraw(map) {
 
   // Lazy-load symbol images (non-arrow).
   // Preference order: _MAP.png → _MAP.gif → _OFF.png
+  // GIF images get a periodic updateImage loop so the animation plays.
+  const gifUpdaters = new Map()  // imageName → intervalId
+
   function loadSymbolImage(name) {
     const candidates = [
       `/icons/${name}_MAP.png`,
@@ -166,7 +169,16 @@ export function initDraw(map) {
     function tryNext(i) {
       if (i >= candidates.length) return
       const img = new Image()
-      img.onload  = () => { if (!map.hasImage(name)) map.addImage(name, img) }
+      img.onload = () => {
+        if (!map.hasImage(name)) map.addImage(name, img)
+        if (candidates[i].endsWith('.gif') && !gifUpdaters.has(name)) {
+          const id = setInterval(() => {
+            if (map.hasImage(name)) map.updateImage(name, img)
+            else { clearInterval(id); gifUpdaters.delete(name) }
+          }, 80)
+          gifUpdaters.set(name, id)
+        }
+      }
       img.onerror = () => tryNext(i + 1)
       img.src = candidates[i]
     }
