@@ -343,7 +343,7 @@ export function initDraw(map) {
     type: 'line',
     source: 'ruler-src',
     filter: ['==', '$type', 'LineString'],
-    paint: { 'line-color': '#ffffff', 'line-width': 2, 'line-dasharray': [4, 4], 'line-opacity': 0.9 }
+    paint: { 'line-color': '#ffffff', 'line-width': 2, 'line-opacity': 0.9 }
   })
   map.addLayer({
     id: 'ruler-dots',
@@ -1082,6 +1082,7 @@ export function initDraw(map) {
     // Stop ruler if switching away
     if (rulerMode && mode !== 'symbol_ruler') {
       rulerMode = false
+      clearRuler()
     }
 
     if (mode === 'symbol_ruler') {
