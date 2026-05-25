@@ -160,56 +160,7 @@ export function initDraw(map) {
   // Lazy-load symbol images (non-arrow).
   // Candidates: _MAP_sheet.png (spritesheet) → _MAP.png → _MAP.gif → _OFF.png
   // Spritesheets are animated via a shared RAF loop that steps frame indices.
-  // Spritesheet config — add an entry for each animated symbol that has a _sheet.png
-  const SHEET_CONFIG = {
-    HELICOPTER: { cols: 6, rows: 5, frames: 30, fps: 33, fw: 64, fh: 64 },
-  }
-
   function loadSymbolImage(name) {
-    const cfg = SHEET_CONFIG[name]
-
-    if (cfg) {
-      // ── Spritesheet via MapLibre StyleImageInterface ───────────────────────
-      // MapLibre calls render() every frame; we update this.data in-place and
-      // return true to keep the animation running. No updateImage() needed.
-      const img = new Image()
-      img.onload = () => {
-        if (map.hasImage(name)) return
-        const canvas = document.createElement('canvas')
-        canvas.width = cfg.fw; canvas.height = cfg.fh
-        const ctx    = canvas.getContext('2d')
-        let frame    = 0
-        let elapsed  = 0
-        let lastTs   = null
-
-        map.addImage(name, {
-          width:  cfg.fw,
-          height: cfg.fh,
-          data:   new Uint8Array(cfg.fw * cfg.fh * 4),
-          render() {
-            const now = performance.now()
-            const dt  = lastTs != null ? now - lastTs : 0
-            lastTs    = now
-            elapsed  += dt
-            const msPerFrame = 1000 / cfg.fps
-            if (elapsed >= msPerFrame) {
-              frame    = (frame + Math.floor(elapsed / msPerFrame)) % cfg.frames
-              elapsed %= msPerFrame
-              const col = frame % cfg.cols
-              const row = Math.floor(frame / cfg.cols)
-              ctx.clearRect(0, 0, cfg.fw, cfg.fh)
-              ctx.drawImage(img, col * cfg.fw, row * cfg.fh, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
-              this.data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
-            }
-            return true  // keep map repainting every frame
-          }
-        })
-      }
-      img.src = `/icons/${name}_MAP_sheet.png`
-      return
-    }
-
-    // ── Static / GIF fallback ─────────────────────────────────────────────
     const candidates = [
       `/icons/${name}_MAP.png`,
       `/icons/${name}_MAP.gif`,
