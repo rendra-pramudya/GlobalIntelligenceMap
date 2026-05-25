@@ -202,8 +202,53 @@ export function initDraw(map) {
 
   // Lazy-load symbol images (non-arrow).
   // Candidates: _MAP_sheet.png (spritesheet) → _MAP.png → _MAP.gif → _OFF.png
-  // Spritesheets are animated via a shared RAF loop that steps frame indices.
+  // ── Spritesheet animation ─────────────────────────────────────────────────
+  // Eagerly registered at init (not inside styleimagemissing) so map.addImage
+  // is never called during MapLibre's render cycle, which causes internal errors.
+  const SHEET_CONFIG = {
+    HELICOPTER: { cols: 6, rows: 5, frames: 30, fps: 33, fw: 64, fh: 64 },
+  }
+
+  Object.entries(SHEET_CONFIG).forEach(([name, cfg]) => {
+    const img = new Image()
+    img.onload = () => {
+      if (map.hasImage(name)) return
+      const canvas = document.createElement('canvas')
+      canvas.width = cfg.fw; canvas.height = cfg.fh
+      const ctx    = canvas.getContext('2d')
+      // Seed data with frame 0 so the icon is visible immediately
+      ctx.drawImage(img, 0, 0, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
+      const data = new Uint8Array(cfg.fw * cfg.fh * 4)
+      data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
+      let frame = 0, elapsed = 0, lastTs = null
+      map.addImage(name, {
+        width: cfg.fw, height: cfg.fh, data,
+        render() {
+          const now = performance.now()
+          const dt  = lastTs != null ? now - lastTs : 0
+          lastTs    = now
+          elapsed  += dt
+          const mspf = 1000 / cfg.fps
+          if (elapsed >= mspf) {
+            frame    = (frame + Math.floor(elapsed / mspf)) % cfg.frames
+            elapsed %= mspf
+            ctx.clearRect(0, 0, cfg.fw, cfg.fh)
+            ctx.drawImage(img,
+              (frame % cfg.cols) * cfg.fw, Math.floor(frame / cfg.cols) * cfg.fh,
+              cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
+            this.data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
+          }
+          return true
+        }
+      })
+    }
+    img.src = `/icons/${name}_MAP_sheet.png`
+  })
+
+  // ── Static image loader (non-animated) ───────────────────────────────────
+  // Skip names handled by SHEET_CONFIG — their eager loader above covers them.
   function loadSymbolImage(name) {
+    if (SHEET_CONFIG[name]) return
     const candidates = [
       `/icons/${name}_MAP.png`,
       `/icons/${name}_MAP.gif`,
