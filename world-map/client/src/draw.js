@@ -355,9 +355,7 @@ export function initDraw(map) {
 
   // ── Ruler state ──────────────────────────────────────────────────────────
   let rulerMode   = false
-  let rulerPoints = []   // [[lng, lat], ...]
-  let rulerPopup  = null
-  let _rulerLastClickMs = 0
+  let rulerPoints = []
 
   function haversineM(a, b) {
     const R = 6371000, toR = d => d * Math.PI / 180
@@ -370,23 +368,24 @@ export function initDraw(map) {
     return m >= 1000 ? (m/1000).toFixed(2) + ' km' : m.toFixed(0) + ' m'
   }
 
+  let rulerPopup = null
+
   function updateRulerDisplay() {
     const pts = rulerPoints
     const features = []
-    if (pts.length >= 2) {
+    if (pts.length === 2) {
       features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: pts } })
     }
     pts.forEach(p => features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: p } }))
     map.getSource('ruler-src').setData({ type: 'FeatureCollection', features })
 
     if (rulerPopup) { rulerPopup.remove(); rulerPopup = null }
-    if (pts.length >= 2) {
-      let total = 0
-      for (let i = 1; i < pts.length; i++) total += haversineM(pts[i-1], pts[i])
-      const last = pts[pts.length - 1]
+    if (pts.length === 2) {
+      const mid = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2]
+      const dist = haversineM(pts[0], pts[1])
       rulerPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'ruler-popup' })
-        .setLngLat(last)
-        .setHTML(`<b>${fmtDist(total)}</b>`)
+        .setLngLat(mid)
+        .setHTML(`<b>${fmtDist(dist)}</b>`)
         .addTo(map)
     }
   }
@@ -691,19 +690,16 @@ export function initDraw(map) {
     if (rulerMode) {
       e.preventDefault()
       e.stopPropagation()
-      const now = Date.now()
-      // Double-click / double-tap within 350 ms finishes measuring
-      if (now - _rulerLastClickMs < 350) {
-        // remove the duplicate last point added by the first tap of the dblclick
-        if (rulerPoints.length > 1) rulerPoints.pop()
+      rulerPoints.push([ll.lng, ll.lat])
+      if (rulerPoints.length === 2) {
+        // Second point — show result and finish
         updateRulerDisplay()
         rulerMode = false
         mapEl.style.cursor = ''
-        return
+      } else {
+        // First point placed — update dots only, wait for second click
+        updateRulerDisplay()
       }
-      _rulerLastClickMs = now
-      rulerPoints.push([ll.lng, ll.lat])
-      updateRulerDisplay()
       return
     }
 
