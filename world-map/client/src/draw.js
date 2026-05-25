@@ -160,83 +160,66 @@ export function initDraw(map) {
   // Lazy-load symbol images (non-arrow).
   // Candidates: _MAP_sheet.png (spritesheet) → _MAP.png → _MAP.gif → _OFF.png
   // Spritesheets are animated via a shared RAF loop that steps frame indices.
+  // Spritesheet config — add an entry for each animated symbol that has a _sheet.png
   const SHEET_CONFIG = {
     HELICOPTER: { cols: 6, rows: 5, frames: 30, fps: 33, fw: 64, fh: 64 },
   }
 
-  const sheetAnimations = new Map()  // name → { img, canvas, ctx, cfg, frame, elapsed }
-  let   sheetRafId      = null
-  let   sheetLastTs     = null
-
-  function sheetAnimTick(ts) {
-    if (sheetAnimations.size === 0) { sheetRafId = null; sheetLastTs = null; return }
-    const dt = sheetLastTs != null ? ts - sheetLastTs : 0
-    sheetLastTs = ts
-    sheetAnimations.forEach((anim, name) => {
-      if (!map.hasImage(name)) { sheetAnimations.delete(name); return }
-      anim.elapsed += dt
-      const msPerFrame = 1000 / anim.cfg.fps
-      if (anim.elapsed >= msPerFrame) {
-        anim.frame   = (anim.frame + Math.floor(anim.elapsed / msPerFrame)) % anim.cfg.frames
-        anim.elapsed %= msPerFrame
-        const col = anim.frame % anim.cfg.cols
-        const row = Math.floor(anim.frame / anim.cfg.cols)
-        anim.ctx.clearRect(0, 0, anim.cfg.fw, anim.cfg.fh)
-        anim.ctx.drawImage(anim.img, col * anim.cfg.fw, row * anim.cfg.fh, anim.cfg.fw, anim.cfg.fh, 0, 0, anim.cfg.fw, anim.cfg.fh)
-        map.updateImage(name, anim.ctx.getImageData(0, 0, anim.cfg.fw, anim.cfg.fh))
-      }
-    })
-    map.triggerRepaint()
-    sheetRafId = requestAnimationFrame(sheetAnimTick)
-  }
-
-  // GIF fallback: offscreen canvas RAF (browser animates the <img> element)
-  const gifAnimations = new Map()
-  let gifRafId = null
-
-  function gifAnimTick() {
-    if (gifAnimations.size === 0) { gifRafId = null; return }
-    gifAnimations.forEach(({ img, canvas, ctx }, name) => {
-      if (!map.hasImage(name)) { gifAnimations.delete(name); return }
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(img, 0, 0)
-      map.updateImage(name, canvas)
-    })
-    map.triggerRepaint()
-    gifRafId = requestAnimationFrame(gifAnimTick)
-  }
-
   function loadSymbolImage(name) {
     const cfg = SHEET_CONFIG[name]
-    const candidates = cfg
-      ? [`/icons/${name}_MAP_sheet.png`]
-      : [`/icons/${name}_MAP.png`, `/icons/${name}_MAP.gif`, `/icons/${name}_OFF.png`]
 
+    if (cfg) {
+      // ── Spritesheet via MapLibre StyleImageInterface ───────────────────────
+      // MapLibre calls render() every frame; we update this.data in-place and
+      // return true to keep the animation running. No updateImage() needed.
+      const img = new Image()
+      img.onload = () => {
+        if (map.hasImage(name)) return
+        const canvas = document.createElement('canvas')
+        canvas.width = cfg.fw; canvas.height = cfg.fh
+        const ctx    = canvas.getContext('2d')
+        let frame    = 0
+        let elapsed  = 0
+        let lastTs   = null
+
+        map.addImage(name, {
+          width:  cfg.fw,
+          height: cfg.fh,
+          data:   new Uint8Array(cfg.fw * cfg.fh * 4),
+          render() {
+            const now = performance.now()
+            const dt  = lastTs != null ? now - lastTs : 0
+            lastTs    = now
+            elapsed  += dt
+            const msPerFrame = 1000 / cfg.fps
+            if (elapsed >= msPerFrame) {
+              frame    = (frame + Math.floor(elapsed / msPerFrame)) % cfg.frames
+              elapsed %= msPerFrame
+              const col = frame % cfg.cols
+              const row = Math.floor(frame / cfg.cols)
+              ctx.clearRect(0, 0, cfg.fw, cfg.fh)
+              ctx.drawImage(img, col * cfg.fw, row * cfg.fh, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
+              this.data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
+            }
+            return true  // keep map repainting every frame
+          }
+        })
+      }
+      img.src = `/icons/${name}_MAP_sheet.png`
+      return
+    }
+
+    // ── Static / GIF fallback ─────────────────────────────────────────────
+    const candidates = [
+      `/icons/${name}_MAP.png`,
+      `/icons/${name}_MAP.gif`,
+      `/icons/${name}_OFF.png`,
+    ]
     function tryNext(i) {
       if (i >= candidates.length) return
       const img = new Image()
-      img.onload = () => {
-        if (cfg) {
-          // Spritesheet: seed the map with frame 0 as ImageData, then animate
-          const canvas = document.createElement('canvas')
-          canvas.width = cfg.fw; canvas.height = cfg.fh
-          const ctx = canvas.getContext('2d')
-          ctx.drawImage(img, 0, 0, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
-          if (!map.hasImage(name)) map.addImage(name, ctx.getImageData(0, 0, cfg.fw, cfg.fh))
-          sheetAnimations.set(name, { img, canvas, ctx, cfg, frame: 0, elapsed: 0 })
-          if (!sheetRafId) sheetRafId = requestAnimationFrame(sheetAnimTick)
-        } else {
-          if (!map.hasImage(name)) map.addImage(name, img)
-          if (candidates[i].endsWith('.gif') && !gifAnimations.has(name)) {
-            const canvas = document.createElement('canvas')
-            canvas.width  = img.naturalWidth  || 64
-            canvas.height = img.naturalHeight || 64
-            gifAnimations.set(name, { img, canvas, ctx: canvas.getContext('2d') })
-            if (!gifRafId) gifRafId = requestAnimationFrame(gifAnimTick)
-          }
-        }
-      }
-      img.onerror = () => { if (!cfg) tryNext(i + 1) }
+      img.onload = () => { if (!map.hasImage(name)) map.addImage(name, img) }
+      img.onerror = () => tryNext(i + 1)
       img.src = candidates[i]
     }
     tryNext(0)
