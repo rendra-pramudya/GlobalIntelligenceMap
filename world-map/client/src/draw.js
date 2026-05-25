@@ -206,7 +206,16 @@ export function initDraw(map) {
   // Eagerly registered at init (not inside styleimagemissing) so map.addImage
   // is never called during MapLibre's render cycle, which causes internal errors.
   const SHEET_CONFIG = {
-    HELICOPTER: { cols: 6, rows: 5, frames: 30, fps: 33, fw: 64, fh: 64 },
+    HELICOPTER: { cols: 4, rows: 4, frames: 16, fps: 16, fw: 128, fh: 128 },
+  }
+
+  // Keep a forced-repaint RAF alive so MapLibre never pauses animated images.
+  let _sheetRafRunning = false
+  function _ensureSheetRepaint() {
+    if (_sheetRafRunning) return
+    _sheetRafRunning = true
+    function tick() { map.triggerRepaint(); requestAnimationFrame(tick) }
+    requestAnimationFrame(tick)
   }
 
   Object.entries(SHEET_CONFIG).forEach(([name, cfg]) => {
@@ -216,7 +225,6 @@ export function initDraw(map) {
       const canvas = document.createElement('canvas')
       canvas.width = cfg.fw; canvas.height = cfg.fh
       const ctx    = canvas.getContext('2d')
-      // Seed data with frame 0 so the icon is visible immediately
       ctx.drawImage(img, 0, 0, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
       const data = new Uint8Array(cfg.fw * cfg.fh * 4)
       data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
@@ -232,6 +240,7 @@ export function initDraw(map) {
           return true
         }
       })
+      _ensureSheetRepaint()
     }
     img.src = `/icons/${name}_MAP_sheet.png`
   })
