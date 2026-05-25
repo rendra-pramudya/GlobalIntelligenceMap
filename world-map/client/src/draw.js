@@ -113,6 +113,14 @@ export function initDraw(map) {
   let symDragging    = false   // actively dragging a symbol
   let symDragId      = null    // id of the symbol being dragged
   let symDragPrev    = null    // last [lng, lat] for bearing computation
+  let symDragHistory = []      // [{lng, lat, t}] rolling window for velocity
+
+  // ── Symbol momentum state ────────────────────────────────────────────────
+  let symMomentumId    = null  // symbol currently coasting
+  let symMomentumVLng  = 0     // lng velocity (deg/ms)
+  let symMomentumVLat  = 0     // lat velocity (deg/ms)
+  let symMomentumTs    = null  // last RAF timestamp
+  let symMomentumRaf   = null
 
   // ── Symbol-path gesture state ─────────────────────────────────────────────
   // When a symbol is armed and the user drags instead of clicking, we draw a
@@ -121,6 +129,35 @@ export function initDraw(map) {
   let symPathThreshMet = false   // have we crossed the movement threshold?
   let symPathCoords    = []      // coords collected during gesture
   let _suppressNextClick = false // set after a committed path to block map click
+
+  function momentumTick(ts) {
+    if (!symMomentumId) return
+    const dt    = symMomentumTs != null ? ts - symMomentumTs : 16
+    symMomentumTs = ts
+    // Exponential friction: feels like ~1.2 s coast
+    const decay = Math.pow(0.92, dt / 16)
+    symMomentumVLng *= decay
+    symMomentumVLat *= decay
+    const speed = Math.sqrt(symMomentumVLng ** 2 + symMomentumVLat ** 2)
+    if (speed < 1e-9) {
+      const feat = localSymbols.get(symMomentumId)
+      if (feat) socket.send(JSON.stringify({ type: 'symbol_create', feature: feat }))
+      symMomentumId = null; symMomentumRaf = null; symMomentumTs = null
+      return
+    }
+    const feat = localSymbols.get(symMomentumId)
+    if (!feat) { symMomentumId = null; symMomentumRaf = null; return }
+    const [lng, lat] = feat.geometry.coordinates
+    const newLng = lng + symMomentumVLng * dt
+    const newLat = lat + symMomentumVLat * dt
+    localSymbols.set(symMomentumId, {
+      ...feat,
+      geometry:   { type: 'Point', coordinates: [newLng, newLat] },
+      properties: { ...feat.properties }
+    })
+    updateSymbolSource()
+    symMomentumRaf = requestAnimationFrame(momentumTick)
+  }
 
   // ── SELECT4 state ─────────────────────────────────────────────────────────
   let select4Mode          = false
@@ -557,6 +594,10 @@ export function initDraw(map) {
       if (hit) {
         e.preventDefault()
         e.stopPropagation()
+        // Cancel any in-flight momentum before starting a new drag
+        symMomentumId = null
+        if (symMomentumRaf) { cancelAnimationFrame(symMomentumRaf); symMomentumRaf = null }
+        symDragHistory = []
         _activePtrId = e.pointerId
         symDragging  = true
         symDragId    = hit.properties.id
@@ -633,7 +674,6 @@ export function initDraw(map) {
         let bearing  = feat.properties.bearing ?? 0
         if (Math.hypot(prevPx.x - curPx.x, prevPx.y - curPx.y) > 4) {
           const raw  = bearingDeg(symDragPrev, [ll.lng, ll.lat])
-          // Exponential smoothing — shortest-angle diff handles 0/360 wrap
           const diff = ((raw - bearing) + 540) % 360 - 180
           bearing     = (bearing + diff * 0.25 + 360) % 360
           symDragPrev = [ll.lng, ll.lat]
@@ -644,6 +684,9 @@ export function initDraw(map) {
           properties: { ...feat.properties, bearing }
         })
         updateSymbolSource()
+        // Track velocity history (keep last 6 samples)
+        symDragHistory.push({ lng: ll.lng, lat: ll.lat, t: performance.now() })
+        if (symDragHistory.length > 6) symDragHistory.shift()
       }
       return
     }
@@ -706,16 +749,43 @@ export function initDraw(map) {
       return
     }
 
-    // ── Case 2: symbol drag end ────────────────────────────────────────────
+    // ── Case 2: symbol drag end — launch momentum ─────────────────────────
     if (symDragging) {
       symDragging  = false
       _activePtrId = null
       map.dragPan.enable()
       mapEl.style.cursor = 'default'
-      const feat = localSymbols.get(symDragId)
-      if (feat) socket.send(JSON.stringify({ type: 'symbol_create', feature: feat }))
+
+      const releasedId = symDragId
       symDragId   = null
       symDragPrev = null
+
+      // Cancel any previous momentum on a different symbol
+      symMomentumId = null
+      if (symMomentumRaf) { cancelAnimationFrame(symMomentumRaf); symMomentumRaf = null }
+
+      // Compute velocity from history window
+      const h = symDragHistory
+      symDragHistory = []
+      if (h.length >= 2) {
+        const h0 = h[0], h1 = h[h.length - 1]
+        const dt = h1.t - h0.t
+        if (dt > 0 && dt < 250) {  // only if gesture was recent
+          const vLng = (h1.lng - h0.lng) / dt
+          const vLat = (h1.lat - h0.lat) / dt
+          if (Math.sqrt(vLng ** 2 + vLat ** 2) > 1e-7) {
+            symMomentumId   = releasedId
+            symMomentumVLng = vLng
+            symMomentumVLat = vLat
+            symMomentumTs   = null
+            symMomentumRaf  = requestAnimationFrame(momentumTick)
+            return  // socket send happens when momentum stops
+          }
+        }
+      }
+      // No momentum — send final position immediately
+      const feat = localSymbols.get(releasedId)
+      if (feat) socket.send(JSON.stringify({ type: 'symbol_create', feature: feat }))
       return
     }
 
