@@ -976,3 +976,61 @@
   font-weight: 600;
   pointer-events: none;
 }
+
+/* ── Country border source radio buttons ─────────────────────────────────── */
+.country-border-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.country-border-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: 5px;
+  border: 1px solid #2d3238;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.country-border-radio:hover {
+  border-color: #4a5060;
+  background: #1f2228;
+}
+.country-border-radio input[type="radio"] {
+  display: none;
+}
+.country-border-radio:has(input:checked) {
+  border-color: #4488ff;
+  background: rgba(68,136,255,0.08);
+}
+.cbr-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #c8ccd2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cbr-title::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #555;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+.country-border-radio:has(input:checked) .cbr-title::before {
+  border-color: #4488ff;
+  background: #4488ff;
+  box-shadow: inset 0 0 0 2px #1a1d21;
+}
+.cbr-desc {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+  padding-left: 18px;
+}

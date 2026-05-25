@@ -351,6 +351,27 @@ export function initControls(map, drawContext, overlays, debug) {
         </div>
         <div class="sb-section-body" id="sec-country">
           <label class="layer-toggle"><input type="checkbox" id="toggle-country-style"> Enable country selection</label>
+
+          <!-- Border data source -->
+          <div class="section-label" style="margin-top:6px">Border data source</div>
+          <div class="country-border-options">
+            <label class="country-border-radio">
+              <input type="radio" name="border-source" value="natural-earth" checked>
+              <span class="cbr-title">Natural Earth 10m</span>
+              <span class="cbr-desc">De-facto borders, internationally accepted. Disputed areas (Taiwan, Kosovo, Western Sahara…) shown as separate territories.</span>
+            </label>
+            <label class="country-border-radio">
+              <input type="radio" name="border-source" value="un-wms">
+              <span class="cbr-title">UN Geospatial tiles</span>
+              <span class="cbr-desc">Official UN Cartographic Section raster overlay. Read-only — no click interaction. Requires internet on deployment.</span>
+            </label>
+            <label class="country-border-radio">
+              <input type="radio" name="border-source" value="both">
+              <span class="cbr-title">Both</span>
+              <span class="cbr-desc">Natural Earth for click-to-select interaction + UN tile overlay on top for official border reference.</span>
+            </label>
+          </div>
+
           <div id="country-selection-panel" style="display:none">
             <div class="country-selected-name" id="country-selected-name">Click a country on the map</div>
             <div class="ap-row ap-tint-row" id="country-style-row" style="display:none">
