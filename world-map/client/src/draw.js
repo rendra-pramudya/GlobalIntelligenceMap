@@ -1,3 +1,4 @@
+import maplibregl from 'maplibre-gl'
 import MaplibreDraw from 'maplibre-gl-draw'
 
 const COLOR_MAP = {
@@ -332,6 +333,70 @@ export function initDraw(map) {
     paint: { 'fill-color': DEFAULT_COLOR, 'fill-opacity': 0.15 }
   })
 
+  // ── Ruler sources & layers ───────────────────────────────────────────────
+  map.addSource('ruler-src', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  })
+  map.addLayer({
+    id: 'ruler-line',
+    type: 'line',
+    source: 'ruler-src',
+    filter: ['==', '$type', 'LineString'],
+    paint: { 'line-color': '#ffffff', 'line-width': 2, 'line-dasharray': [4, 4], 'line-opacity': 0.9 }
+  })
+  map.addLayer({
+    id: 'ruler-dots',
+    type: 'circle',
+    source: 'ruler-src',
+    filter: ['==', '$type', 'Point'],
+    paint: { 'circle-radius': 4, 'circle-color': '#000000', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 }
+  })
+
+  // ── Ruler state ──────────────────────────────────────────────────────────
+  let rulerMode   = false
+  let rulerPoints = []   // [[lng, lat], ...]
+  let rulerPopup  = null
+  let _rulerLastClickMs = 0
+
+  function haversineM(a, b) {
+    const R = 6371000, toR = d => d * Math.PI / 180
+    const dLat = toR(b[1] - a[1]), dLng = toR(b[0] - a[0])
+    const s = Math.sin(dLat/2)**2 + Math.cos(toR(a[1]))*Math.cos(toR(b[1]))*Math.sin(dLng/2)**2
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s))
+  }
+
+  function fmtDist(m) {
+    return m >= 1000 ? (m/1000).toFixed(2) + ' km' : m.toFixed(0) + ' m'
+  }
+
+  function updateRulerDisplay() {
+    const pts = rulerPoints
+    const features = []
+    if (pts.length >= 2) {
+      features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: pts } })
+    }
+    pts.forEach(p => features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: p } }))
+    map.getSource('ruler-src').setData({ type: 'FeatureCollection', features })
+
+    if (rulerPopup) { rulerPopup.remove(); rulerPopup = null }
+    if (pts.length >= 2) {
+      let total = 0
+      for (let i = 1; i < pts.length; i++) total += haversineM(pts[i-1], pts[i])
+      const last = pts[pts.length - 1]
+      rulerPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'ruler-popup' })
+        .setLngLat(last)
+        .setHTML(`<b>${fmtDist(total)}</b>`)
+        .addTo(map)
+    }
+  }
+
+  function clearRuler() {
+    rulerPoints = []
+    map.getSource('ruler-src').setData({ type: 'FeatureCollection', features: [] })
+    if (rulerPopup) { rulerPopup.remove(); rulerPopup = null }
+  }
+
   // ── Freehand state ────────────────────────────────────────────────────────
   let freehandMode    = null  // null | 'line' | 'polygon'
   let freehandCoords  = []
@@ -621,6 +686,26 @@ export function initDraw(map) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
 
     const ll = lngLatFromPtr(e)
+
+    // ── Case 0: ruler tool ────────────────────────────────────────────────
+    if (rulerMode) {
+      e.preventDefault()
+      e.stopPropagation()
+      const now = Date.now()
+      // Double-click / double-tap within 350 ms finishes measuring
+      if (now - _rulerLastClickMs < 350) {
+        // remove the duplicate last point added by the first tap of the dblclick
+        if (rulerPoints.length > 1) rulerPoints.pop()
+        updateRulerDisplay()
+        rulerMode = false
+        mapEl.style.cursor = ''
+        return
+      }
+      _rulerLastClickMs = now
+      rulerPoints.push([ll.lng, ll.lat])
+      updateRulerDisplay()
+      return
+    }
 
     // ── Case 1: active freehand line/polygon tool ──────────────────────────
     if (freehandMode) {
@@ -994,7 +1079,21 @@ export function initDraw(map) {
     clearMarqueeRect()
     updateSelect4Rings()
 
-    if (mode === 'freehand_line' || mode === 'freehand_polygon') {
+    // Stop ruler if switching away
+    if (rulerMode && mode !== 'symbol_ruler') {
+      rulerMode = false
+    }
+
+    if (mode === 'symbol_ruler') {
+      freehandMode   = null
+      symbolMoveMode = false
+      rulerMode      = true
+      rulerPoints    = []
+      clearRuler()
+      draw.changeMode('simple_select')
+      mapEl.style.cursor      = 'crosshair'
+      mapEl.style.touchAction = 'none'
+    } else if (mode === 'freehand_line' || mode === 'freehand_polygon') {
       freehandMode   = mode === 'freehand_line' ? 'line' : 'polygon'
       symbolMoveMode = false
       draw.changeMode('freehand_guard')
