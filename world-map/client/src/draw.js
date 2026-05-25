@@ -177,13 +177,13 @@ export function initDraw(map) {
       anim.elapsed += dt
       const msPerFrame = 1000 / anim.cfg.fps
       if (anim.elapsed >= msPerFrame) {
-        anim.frame    = (anim.frame + Math.floor(anim.elapsed / msPerFrame)) % anim.cfg.frames
-        anim.elapsed  %= msPerFrame
+        anim.frame   = (anim.frame + Math.floor(anim.elapsed / msPerFrame)) % anim.cfg.frames
+        anim.elapsed %= msPerFrame
         const col = anim.frame % anim.cfg.cols
         const row = Math.floor(anim.frame / anim.cfg.cols)
         anim.ctx.clearRect(0, 0, anim.cfg.fw, anim.cfg.fh)
         anim.ctx.drawImage(anim.img, col * anim.cfg.fw, row * anim.cfg.fh, anim.cfg.fw, anim.cfg.fh, 0, 0, anim.cfg.fw, anim.cfg.fh)
-        map.updateImage(name, anim.canvas)
+        map.updateImage(name, anim.ctx.getImageData(0, 0, anim.cfg.fw, anim.cfg.fh))
       }
     })
     map.triggerRepaint()
@@ -217,12 +217,12 @@ export function initDraw(map) {
       const img = new Image()
       img.onload = () => {
         if (cfg) {
-          // Spritesheet: seed the map with frame 0, then animate
+          // Spritesheet: seed the map with frame 0 as ImageData, then animate
           const canvas = document.createElement('canvas')
           canvas.width = cfg.fw; canvas.height = cfg.fh
           const ctx = canvas.getContext('2d')
           ctx.drawImage(img, 0, 0, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
-          if (!map.hasImage(name)) map.addImage(name, canvas)
+          if (!map.hasImage(name)) map.addImage(name, ctx.getImageData(0, 0, cfg.fw, cfg.fh))
           sheetAnimations.set(name, { img, canvas, ctx, cfg, frame: 0, elapsed: 0 })
           if (!sheetRafId) sheetRafId = requestAnimationFrame(sheetAnimTick)
         } else {
