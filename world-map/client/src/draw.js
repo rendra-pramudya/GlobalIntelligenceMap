@@ -108,6 +108,13 @@ export function initDraw(map) {
 
   const mapEl = map.getContainer()
 
+  // ── Icon settings (persisted) ────────────────────────────────────────────
+  let iconSize         = parseFloat(localStorage.getItem('wm_icon_size')      ?? '0.5')
+  let momentumEnabled  = (localStorage.getItem('wm_momentum_enabled')  ?? 'true') === 'true'
+  let momentumStrength = parseInt(  localStorage.getItem('wm_momentum_strength') ?? '60', 10)
+  // friction derived from strength (0→0.85, 100→0.97)
+  let momentumFriction = 0.85 + (momentumStrength / 100) * 0.12
+
   // ── Symbol-move (MOVE tool) state ────────────────────────────────────────
   let symbolMoveMode = false   // true when MOVE tool is active
   let symDragging    = false   // actively dragging a symbol
@@ -134,8 +141,7 @@ export function initDraw(map) {
     if (!symMomentumId) return
     const dt    = symMomentumTs != null ? ts - symMomentumTs : 16
     symMomentumTs = ts
-    // Exponential friction: feels like ~1.2 s coast
-    const decay = Math.pow(0.92, dt / 16)
+    const decay = Math.pow(momentumFriction, dt / 16)
     symMomentumVLng *= decay
     symMomentumVLat *= decay
     const speed = Math.sqrt(symMomentumVLng ** 2 + symMomentumVLat ** 2)
@@ -182,7 +188,7 @@ export function initDraw(map) {
     source: 'draw-symbols-source',
     layout: {
       'icon-image': ['get', 'symbolName'],
-      'icon-size': 0.5,
+      'icon-size': iconSize,
       'icon-allow-overlap': true,
       'icon-anchor': 'center',
       'icon-rotate': ['coalesce', ['get', 'bearing'], 0],
@@ -773,7 +779,7 @@ export function initDraw(map) {
         if (dt > 0 && dt < 250) {  // only if gesture was recent
           const vLng = (h1.lng - h0.lng) / dt
           const vLat = (h1.lat - h0.lat) / dt
-          if (Math.sqrt(vLng ** 2 + vLat ** 2) > 1e-7) {
+          if (momentumEnabled && Math.sqrt(vLng ** 2 + vLat ** 2) > 1e-7) {
             symMomentumId   = releasedId
             symMomentumVLng = vLng
             symMomentumVLat = vLat
@@ -1070,7 +1076,29 @@ export function initDraw(map) {
     updateSymbolSource()
   }
 
-  return { draw, setTool, setActiveSymbol, setActiveLine, undo, deleteSelected, getState, restoreState }
+  function setIconSize(size) {
+    iconSize = size
+    localStorage.setItem('wm_icon_size', size)
+    if (map.getLayer('draw-symbols-layer'))
+      map.setLayoutProperty('draw-symbols-layer', 'icon-size', size)
+  }
+
+  function setMomentumEnabled(enabled) {
+    momentumEnabled = enabled
+    localStorage.setItem('wm_momentum_enabled', enabled)
+    if (!enabled && symMomentumId) {
+      cancelAnimationFrame(symMomentumRaf)
+      symMomentumId = null; symMomentumRaf = null
+    }
+  }
+
+  function setMomentumStrength(strength) {
+    momentumStrength = strength
+    momentumFriction = 0.85 + (strength / 100) * 0.12
+    localStorage.setItem('wm_momentum_strength', strength)
+  }
+
+  return { draw, setTool, setActiveSymbol, setActiveLine, undo, deleteSelected, getState, restoreState, setIconSize, setMomentumEnabled, setMomentumStrength }
 }
 
 function colorExpression() {

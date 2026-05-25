@@ -196,6 +196,29 @@ export function initControls(map, drawContext, overlays, debug) {
         </div>
       </div>
 
+      <!-- ICONS section -->
+      <div class="sb-section">
+        <div class="sb-section-header" data-section="icons">
+          <span class="sb-section-icon">◈</span>
+          <span class="sb-section-title">Icons</span>
+          <span class="sb-chevron">›</span>
+        </div>
+        <div class="sb-section-body" id="sec-icons">
+          <div class="ap-row">
+            <span class="ap-label">Size</span>
+            <input type="range" class="ap-slider" id="icon-size-slider" min="10" max="200" step="5" value="50">
+            <span class="ap-val" id="icon-size-val">0.5×</span>
+          </div>
+          <div class="section-label" style="margin-top:6px">Momentum</div>
+          <label class="layer-toggle"><input type="checkbox" id="icon-momentum-on" checked> Enable on drag release</label>
+          <div class="ap-row" id="icon-momentum-row">
+            <span class="ap-label">Strength</span>
+            <input type="range" class="ap-slider" id="icon-momentum-strength" min="0" max="100" step="5" value="60">
+            <span class="ap-val" id="icon-momentum-val">60</span>
+          </div>
+        </div>
+      </div>
+
       <!-- LOCATIONS section -->
       <div class="sb-section">
         <div class="sb-section-header" data-section="locations">
@@ -797,6 +820,46 @@ export function initControls(map, drawContext, overlays, debug) {
       syncColorizeUI()
       applyFilter()
     }
+  })()
+
+  // ── Icons ──────────────────────────────────────────────────────────────────
+  ;(function () {
+    const sizeSlider    = document.getElementById('icon-size-slider')
+    const sizeVal       = document.getElementById('icon-size-val')
+    const momentumOn    = document.getElementById('icon-momentum-on')
+    const momentumStr   = document.getElementById('icon-momentum-strength')
+    const momentumVal   = document.getElementById('icon-momentum-val')
+    const momentumRow   = document.getElementById('icon-momentum-row')
+
+    // Restore persisted values
+    const savedSize     = parseFloat(localStorage.getItem('wm_icon_size')         ?? '0.5')
+    const savedMomOn    = (localStorage.getItem('wm_momentum_enabled')  ?? 'true') === 'true'
+    const savedMomStr   = parseInt(localStorage.getItem('wm_momentum_strength') ?? '60', 10)
+
+    sizeSlider.value    = Math.round(savedSize * 100)
+    sizeVal.textContent = savedSize.toFixed(1) + '×'
+    momentumOn.checked  = savedMomOn
+    momentumStr.value   = savedMomStr
+    momentumVal.textContent = savedMomStr
+    momentumRow.style.opacity = savedMomOn ? '1' : '0.4'
+
+    sizeSlider.addEventListener('input', () => {
+      const v = +sizeSlider.value / 100
+      sizeVal.textContent = v.toFixed(1) + '×'
+      drawContext.setIconSize(v)
+    })
+
+    momentumOn.addEventListener('change', () => {
+      const on = momentumOn.checked
+      momentumRow.style.opacity = on ? '1' : '0.4'
+      drawContext.setMomentumEnabled(on)
+    })
+
+    momentumStr.addEventListener('input', () => {
+      const v = +momentumStr.value
+      momentumVal.textContent = v
+      drawContext.setMomentumStrength(v)
+    })
   })()
 
   // ── Gridlines ──────────────────────────────────────────────────────────────
