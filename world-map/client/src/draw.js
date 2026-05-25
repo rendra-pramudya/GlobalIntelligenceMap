@@ -220,24 +220,15 @@ export function initDraw(map) {
       ctx.drawImage(img, 0, 0, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
       const data = new Uint8Array(cfg.fw * cfg.fh * 4)
       data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
-      let frame = 0, elapsed = 0, lastTs = null
       map.addImage(name, {
         width: cfg.fw, height: cfg.fh, data,
         render() {
-          const now = performance.now()
-          const dt  = lastTs != null ? now - lastTs : 0
-          lastTs    = now
-          elapsed  += dt
-          const mspf = 1000 / cfg.fps
-          if (elapsed >= mspf) {
-            frame    = (frame + Math.floor(elapsed / mspf)) % cfg.frames
-            elapsed %= mspf
-            ctx.clearRect(0, 0, cfg.fw, cfg.fh)
-            ctx.drawImage(img,
-              (frame % cfg.cols) * cfg.fw, Math.floor(frame / cfg.cols) * cfg.fh,
-              cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
-            this.data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
-          }
+          const frame = Math.floor(performance.now() / (1000 / cfg.fps)) % cfg.frames
+          const col   = frame % cfg.cols
+          const row   = Math.floor(frame / cfg.cols)
+          ctx.clearRect(0, 0, cfg.fw, cfg.fh)
+          ctx.drawImage(img, col * cfg.fw, row * cfg.fh, cfg.fw, cfg.fh, 0, 0, cfg.fw, cfg.fh)
+          this.data.set(ctx.getImageData(0, 0, cfg.fw, cfg.fh).data)
           return true
         }
       })
