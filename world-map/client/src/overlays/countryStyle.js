@@ -1,16 +1,17 @@
-const GEO_URL = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+const GEO_URL    = '/countries.geojson'
 const STORAGE_KEY = 'wm_country_styles'
-const SRC = 'wm-country-src'
-const FILL_ID = 'wm-country-fill'
-const LINE_ID = 'wm-country-line'
+const SRC        = 'wm-country-src'
+const FILL_ID    = 'wm-country-fill'
+const LINE_ID    = 'wm-country-line'
+const LABEL_ID   = 'wm-country-label'
 
 export function initCountryStyle(map) {
-  let styles = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+  let styles      = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
   let selectedISO = null
-  let geoData = null
-  let enabled = false
-  let _onchange = null
-  let _onselect = null
+  let geoData     = null
+  let enabled     = false
+  let _onchange   = null
+  let _onselect   = null
 
   function persist() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(styles))
@@ -18,7 +19,6 @@ export function initCountryStyle(map) {
 
   function buildFillColor() {
     const merged = { ...styles }
-    // Selected country always shown with highlight color
     if (selectedISO) merged[selectedISO] = { ...merged[selectedISO], color: '#6699ff', opacity: merged[selectedISO]?.opacity ?? 0.25 }
     const entries = Object.entries(merged)
     if (!entries.length) return 'transparent'
@@ -27,9 +27,7 @@ export function initCountryStyle(map) {
 
   function buildFillOpacity() {
     const merged = { ...styles }
-    if (selectedISO) {
-      merged[selectedISO] = { color: merged[selectedISO]?.color ?? '#6699ff', opacity: 0.25 }
-    }
+    if (selectedISO) merged[selectedISO] = { color: merged[selectedISO]?.color ?? '#6699ff', opacity: 0.25 }
     const entries = Object.entries(merged)
     if (!entries.length) return 0
     return ['match', ['get', 'ISO_A3'], ...entries.flatMap(([iso, s]) => [iso, s.opacity ?? 0.4]), 0]
@@ -54,13 +52,23 @@ export function initCountryStyle(map) {
     return ['case', ['==', ['get', 'ISO_A3'], selectedISO], 1, base]
   }
 
+  function buildLabelFilter() {
+    const isos = new Set(Object.keys(styles))
+    if (selectedISO) isos.add(selectedISO)
+    if (!isos.size) return ['==', 'ISO_A3', '__none__']
+    return ['in', ['get', 'ISO_A3'], ['literal', [...isos]]]
+  }
+
   function updatePaint() {
     if (!map.getLayer(FILL_ID)) return
-    map.setPaintProperty(FILL_ID, 'fill-color', buildFillColor())
-    map.setPaintProperty(FILL_ID, 'fill-opacity', buildFillOpacity())
-    map.setPaintProperty(LINE_ID, 'line-color', buildLineColor())
-    map.setPaintProperty(LINE_ID, 'line-width', buildLineWidth())
-    map.setPaintProperty(LINE_ID, 'line-opacity', buildLineOpacity())
+    map.setPaintProperty(FILL_ID, 'fill-color',   buildFillColor())
+    map.setPaintProperty(FILL_ID, 'fill-opacity',  buildFillOpacity())
+    map.setPaintProperty(LINE_ID, 'line-color',    buildLineColor())
+    map.setPaintProperty(LINE_ID, 'line-width',    buildLineWidth())
+    map.setPaintProperty(LINE_ID, 'line-opacity',  buildLineOpacity())
+    if (map.getLayer(LABEL_ID)) {
+      map.setFilter(LABEL_ID, buildLabelFilter())
+    }
   }
 
   function firstSymbolLayer() {
@@ -89,6 +97,7 @@ export function initCountryStyle(map) {
     map.addSource(SRC, { type: 'geojson', data: geoData, generateId: true })
 
     const before = firstSymbolLayer()
+
     map.addLayer({ id: FILL_ID, type: 'fill', source: SRC,
       paint: { 'fill-color': buildFillColor(), 'fill-opacity': buildFillOpacity() }
     }, before)
@@ -97,21 +106,42 @@ export function initCountryStyle(map) {
       paint: { 'line-color': buildLineColor(), 'line-width': buildLineWidth(), 'line-opacity': buildLineOpacity() }
     }, before)
 
-    map.on('click', FILL_ID, handleClick)
+    // Name label — shown only for selected / styled countries
+    map.addLayer({
+      id: LABEL_ID,
+      type: 'symbol',
+      source: SRC,
+      filter: buildLabelFilter(),
+      layout: {
+        'text-field': ['get', 'ADMIN'],
+        'text-font':  ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 2, 11, 6, 16],
+        'text-anchor': 'center',
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(0,0,0,0.75)',
+        'text-halo-width': 2,
+      }
+    })
+
+    map.on('click',      FILL_ID, handleClick)
     map.on('mouseenter', FILL_ID, handleMouseEnter)
     map.on('mouseleave', FILL_ID, handleMouseLeave)
   }
 
   function removeLayers() {
-    map.off('click', FILL_ID, handleClick)
+    map.off('click',      FILL_ID, handleClick)
     map.off('mouseenter', FILL_ID, handleMouseEnter)
     map.off('mouseleave', FILL_ID, handleMouseLeave)
-    if (map.getLayer(FILL_ID)) map.removeLayer(FILL_ID)
-    if (map.getLayer(LINE_ID)) map.removeLayer(LINE_ID)
-    if (map.getSource(SRC)) map.removeSource(SRC)
+    if (map.getLayer(LABEL_ID)) map.removeLayer(LABEL_ID)
+    if (map.getLayer(FILL_ID))  map.removeLayer(FILL_ID)
+    if (map.getLayer(LINE_ID))  map.removeLayer(LINE_ID)
+    if (map.getSource(SRC))     map.removeSource(SRC)
   }
 
-  // Re-add layers when style reloads (base map switch wipes everything)
   map.on('style.load', () => {
     if (enabled && geoData) addLayers()
   })
@@ -129,10 +159,10 @@ export function initCountryStyle(map) {
 
   return {
     get selectedISO() { return selectedISO },
-    get styles() { return styles },
-    get enabled() { return enabled },
-    set onchange(fn) { _onchange = fn },
-    set onselect(fn) { _onselect = fn },
+    get styles()      { return styles },
+    get enabled()     { return enabled },
+    set onchange(fn)  { _onchange = fn },
+    set onselect(fn)  { _onselect = fn },
 
     async enable() {
       enabled = true
