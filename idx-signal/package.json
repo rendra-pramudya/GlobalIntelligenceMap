@@ -1,0 +1,17 @@
+{
+  "name": "idx-signal",
+  "version": "1.0.0",
+  "description": "IDX Signal - Indonesian Stock Exchange Signal Generator",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "keywords": ["idx", "signal", "trading", "stocks"],
+  "author": "Rendra Pramudya",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDX Signal - Stock Analysis & Trading Signals</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1>📈 IDX Signal Generator</h1>
+            <p>Analisis Fundamental & Teknikal untuk Saham Indonesia</p>
+        </header>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Left Sidebar - Stock List -->
+            <div class="panel panel-list" id="panelList">
+                <div class="panel-header" id="dragHandleList">
+                    <h2>📊 Daftar Saham</h2>
+                    <div class="panel-controls">
+                        <button class="btn-panel" title="Minimize" onclick="togglePanel(this)">−</button>
+                        <button class="btn-panel" title="Float" onclick="floatPanel('panelList')">⊞</button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="Cari saham...">
+                        <select id="sectorFilter">
+                            <option value="">Semua Sektor</option>
+                            <option value="Pertanian">Pertanian</option>
+                            <option value="Keuangan">Keuangan</option>
+                            <option value="Energi">Energi</option>
+                            <option value="Manufaktur">Manufaktur</option>
+                            <option value="Properti">Properti</option>
+                            <option value="Retail">Retail</option>
+                            <option value="Teknologi">Teknologi</option>
+                            <option value="Konstruksi">Konstruksi</option>
+                            <option value="Transportasi">Transportasi</option>
+                        </select>
+                    </div>
+                    <div class="stocks-grid" id="stocksGrid">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center - Stock Details & Signals -->
+            <div class="panel panel-details" id="panelDetails">
+                <div class="panel-header" id="dragHandleDetails">
+                    <h2>📋 Detail Saham & Signal</h2>
+                    <div class="panel-controls">
+                        <button class="btn-panel" title="Minimize" onclick="togglePanel(this)">−</button>
+                        <button class="btn-panel" title="Float" onclick="floatPanel('panelDetails')">⊞</button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div id="stockDetails" class="stock-details">
+                        <div class="empty-state">Pilih saham untuk melihat detail</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar - Signals & Analysis -->
+            <div class="panel panel-signals" id="panelSignals">
+                <div class="panel-header" id="dragHandleSignals">
+                    <h2>⚡ Analisis Signal</h2>
+                    <div class="panel-controls">
+                        <button class="btn-panel" title="Minimize" onclick="togglePanel(this)">−</button>
+                        <button class="btn-panel" title="Float" onclick="floatPanel('panelSignals')">⊞</button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div id="signalAnalysis" class="signal-analysis">
+                        <div class="empty-state">Pilih saham untuk analisis</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="app-footer">
+            <span id="statusText">Ready</span>
+            <span id="stockCount">Total: 0 saham</span>
+        </footer>
+    </div>
+
+    <!-- Floating Panel Template -->
+    <div id="floatingPanelTemplate" style="display: none;">
+        <div class="floating-panel">
+            <div class="panel-header">
+                <h2></h2>
+                <div class="panel-controls">
+                    <button class="btn-panel" onclick="minimizeFloatingPanel(this)">−</button>
+                    <button class="btn-panel" onclick="closeFloatingPanel(this)">✕</button>
+                </div>
+            </div>
+            <div class="panel-content"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
