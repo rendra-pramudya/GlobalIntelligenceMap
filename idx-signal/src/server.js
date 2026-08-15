@@ -2,9 +2,31 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const { getActiveDataSource, calculateMA, calculateRSI, calculateMACD, calculateEMA } = require('./data-sources');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ============================================================
+// DATA SOURCE CONFIGURATION
+// ============================================================
+// Available: 'yahoo-finance' (default) or 'fintech-id'
+// To use fintech-id:
+// 1. Set FINTECH_API_KEY environment variable
+// 2. Set DATA_SOURCE='fintech-id' environment variable
+// ============================================================
+const DATA_SOURCE = process.env.DATA_SOURCE || 'yahoo-finance';
+const FINTECH_API_KEY = process.env.FINTECH_API_KEY || null;
+const dataSource = getActiveDataSource(DATA_SOURCE, FINTECH_API_KEY);
+
+console.log(`📊 Using data source: ${DATA_SOURCE}`);
+if (DATA_SOURCE === 'fintech-id' && !FINTECH_API_KEY) {
+  console.warn('⚠️  fintech-id selected but FINTECH_API_KEY not set. Falling back to yahoo-finance.');
+}
+
+// Cache for data to avoid excessive API calls
+const dataCache = {};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 app.use(cors());
 app.use(express.json());
@@ -13,8 +35,32 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Load stocks data
 const stocksData = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/stocks.json'), 'utf8'));
 
-// Mock market data for analysis
-const generateMarketData = (code) => {
+// Fetch real market data using configured data source
+const fetchMarketData = async (code) => {
+  try {
+    // Check cache
+    if (dataCache[code] && Date.now() - dataCache[code].timestamp < CACHE_TTL) {
+      return dataCache[code].data;
+    }
+
+    const marketData = await dataSource.fetchMarketData(code);
+
+    // Cache the data
+    dataCache[code] = {
+      data: marketData,
+      timestamp: Date.now()
+    };
+
+    return marketData;
+  } catch (error) {
+    console.error(`Error fetching data for ${code}:`, error.message);
+    // Fallback to mock data if API fails
+    return generateMockMarketData(code);
+  }
+};
+
+// Fallback mock data for analysis
+const generateMockMarketData = (code) => {
   const hash = code.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const seed = hash % 1000;
 
@@ -35,6 +81,7 @@ const generateMarketData = (code) => {
     price_change_percent: -10 + (seed % 20)
   };
 };
+
 
 // Signal generation based on fundamental and technical analysis
 const generateSignal = (stock, marketData) => {
@@ -76,50 +123,116 @@ const generateSignal = (stock, marketData) => {
 };
 
 // API Endpoints
-app.get('/api/stocks', (req, res) => {
-  const stocksWithData = stocksData.stocks.map(stock => {
-    const marketData = generateMarketData(stock.code);
-    const signal = generateSignal(stock, marketData);
-    return {
-      ...stock,
-      ...marketData,
-      signal
-    };
-  });
-  res.json({ stocks: stocksWithData, total: stocksWithData.length });
+app.get('/api/stocks', async (req, res) => {
+  try {
+    const stocksWithData = await Promise.all(
+      stocksData.stocks.map(async (stock) => {
+        const marketData = await fetchMarketData(stock.code);
+        const signal = generateSignal(stock, marketData);
+        return {
+          ...stock,
+          ...marketData,
+          signal
+        };
+      })
+    );
+    res.json({ stocks: stocksWithData, total: stocksWithData.length });
+  } catch (error) {
+    console.error('Error fetching stocks:', error);
+    res.status(500).json({ error: 'Error fetching stock data' });
+  }
 });
 
-app.get('/api/stocks/:code', (req, res) => {
-  const stock = stocksData.stocks.find(s => s.code === req.params.code.toUpperCase());
-  if (!stock) return res.status(404).json({ error: 'Stock not found' });
+app.get('/api/stocks/:code', async (req, res) => {
+  try {
+    const stock = stocksData.stocks.find(s => s.code === req.params.code.toUpperCase());
+    if (!stock) return res.status(404).json({ error: 'Stock not found' });
 
-  const marketData = generateMarketData(stock.code);
-  const signal = generateSignal(stock, marketData);
+    const marketData = await fetchMarketData(stock.code);
+    const signal = generateSignal(stock, marketData);
 
-  res.json({ ...stock, ...marketData, signal });
+    res.json({ ...stock, ...marketData, signal });
+  } catch (error) {
+    console.error('Error fetching stock:', error);
+    res.status(500).json({ error: 'Error fetching stock data' });
+  }
 });
 
-app.get('/api/signals', (req, res) => {
-  const sector = req.query.sector;
-  const recommendation = req.query.recommendation;
+app.get('/api/signals', async (req, res) => {
+  try {
+    const sector = req.query.sector;
+    const recommendation = req.query.recommendation;
 
-  let filteredStocks = stocksData.stocks;
+    let filteredStocks = stocksData.stocks;
 
-  if (sector) {
-    filteredStocks = filteredStocks.filter(s => s.sector.toLowerCase() === sector.toLowerCase());
+    if (sector) {
+      filteredStocks = filteredStocks.filter(s => s.sector.toLowerCase() === sector.toLowerCase());
+    }
+
+    const signals = await Promise.all(filteredStocks.map(async (stock) => {
+      const marketData = await fetchMarketData(stock.code);
+      const signal = generateSignal(stock, marketData);
+      return { ...stock, signal };
+    }));
+
+    let filteredSignals = signals;
+    if (recommendation) {
+      filteredSignals = signals.filter(s => s.signal.recommendation.toUpperCase() === recommendation.toUpperCase());
+    }
+
+    res.json({ signals: filteredSignals, total: filteredSignals.length });
+  } catch (error) {
+    console.error('Error fetching signals:', error);
+    res.status(500).json({ error: 'Error fetching signals' });
   }
+});
 
-  const signals = filteredStocks.map(stock => {
-    const marketData = generateMarketData(stock.code);
-    const signal = generateSignal(stock, marketData);
-    return { ...stock, signal };
-  });
+app.get('/api/charts/:code', async (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase();
+    const stock = stocksData.stocks.find(s => s.code === code);
+    if (!stock) return res.status(404).json({ error: 'Stock not found' });
 
-  if (recommendation) {
-    signals = signals.filter(s => s.signal.recommendation.toUpperCase() === recommendation.toUpperCase());
+    let priceHistory = [];
+    let volumeHistory = [];
+
+    try {
+      const historicalData = await dataSource.fetchHistoricalData(code);
+      priceHistory = historicalData.priceHistory;
+      volumeHistory = historicalData.volumeHistory;
+    } catch (error) {
+      // Fallback to mock data if no history available
+      const marketData = generateMockMarketData(code);
+      const basePrice = marketData.currentPrice;
+      const baseVolume = marketData.volume;
+      const hash = code.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const seed = hash % 1000;
+
+      let currentPrice = basePrice * 0.95;
+      for (let i = 0; i < 30; i++) {
+        const randomFactor = (seed + i) % 100;
+        const priceChange = ((randomFactor - 50) / 100) * basePrice * 0.03;
+        currentPrice = Math.max(basePrice * 0.7, currentPrice + priceChange);
+        priceHistory.push(Math.round(currentPrice));
+
+        const volumeVariance = ((seed * (i + 1)) % 150) / 100;
+        volumeHistory.push(Math.round(baseVolume * volumeVariance / 1000000));
+      }
+    }
+
+    const marketData = await fetchMarketData(code);
+    res.json({
+      code,
+      name: stock.name,
+      priceHistory,
+      volumeHistory,
+      currentPrice: marketData.currentPrice,
+      baseVolume: marketData.volume
+    });
+  } catch (error) {
+    console.error('Error fetching chart data:', error);
+    res.status(500).json({ error: 'Error fetching chart data' });
   }
-
-  res.json({ signals, total: signals.length });
 });
 
 app.listen(PORT, () => {

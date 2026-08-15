@@ -1,9 +1,13 @@
+# Dependencies
 node_modules/
-npm-debug.log
+
+# Runtime data (jurnal sinyal, proposal — spesifik per mesin)
+data/*
+!data/stocks.json
+
+# Secrets — JANGAN pernah commit API key
 .env
+
+# OS
+Thumbs.db
 .DS_Store
-dist/
-build/
-*.log
-.vscode/
-.idea/
